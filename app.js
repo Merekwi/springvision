@@ -463,7 +463,7 @@
           const option = document.createElement('option');
           option.value = item.id;
           option.textContent = `${countryName(item.country_code)} — ${item.artist} / ${item.song_title}`;
-          if (isJury && state.profile && item.user_id === state.profile.id && !allowOwn) option.disabled = true;
+          if (isJury && !allowOwn && item.id === state.ownSubmissionId) option.disabled = true;
           select.append(option);
         });
         selects.push(select);
@@ -475,7 +475,7 @@
         selects.forEach(select => [...select.options].forEach(option => {
           if (!option.value) return;
           const selectedElsewhere = selected.has(option.value) && select.value !== option.value;
-          option.disabled = selectedElsewhere || (isJury && !allowOwn && submissions.some(item=>item.id===option.value && item.user_id===state.profile?.id));
+          option.disabled = selectedElsewhere || (isJury && !allowOwn && option.value===state.ownSubmissionId);
         }));
       };
       selects.forEach(select => select.addEventListener('change',refreshOptions));
