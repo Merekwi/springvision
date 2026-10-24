@@ -200,7 +200,18 @@ Deno.serve(async (request) => {
           [...jury, ...televote].forEach(row => sum.set(row.submission_id, (sum.get(row.submission_id) || 0) + row.points));
           overallResults = [...sum.entries()].map(([submission_id, points]) => ({ submission_id, points })).sort((a,b) => b.points - a.points);
         }
-        return json({ profile, isAdmin, season: publicSeason, submissions, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
+        const reservedResult = await db.from("submissions").select("country_code").eq("season_id", season.id).in("status", ["pending","approved"]);
+        if (reservedResult.error) throw new Error(reservedResult.error.message);
+        const reservedCountryCodes = [...new Set((reservedResult.data || []).map(row => row.country_code))];
+        const countriesResult = await db.from("countries").select("code,name,flag_path").eq("enabled", true).order("name");
+        if (countriesResult.error) throw new Error(countriesResult.error.message);
+        const submissionsWithUrls = await Promise.all(submissions.map(async (row) => {
+          const path = typeof row.recap_storage_path === "string" ? row.recap_storage_path : "";
+          if (!path) return { ...row, recap_url: null };
+          const signed = await db.storage.from(BUCKET).createSignedUrl(path, 3600);
+          return { ...row, recap_url: signed.data?.signedUrl || null };
+        }));
+        return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
       }
 
       case "submit_application": {
