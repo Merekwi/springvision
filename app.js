@@ -183,6 +183,9 @@
       comment.placeholder = 'Комментарий (обязателен по желанию при отклонении)';
       comment.value = row.moderation_comment || '';
       comment.rows = 2;
+      const feedback = document.createElement('p');
+      feedback.className = 'admin-review-feedback';
+      feedback.setAttribute('role','status');
       const actions = document.createElement('div');
       actions.className = 'admin-inline-actions';
       if (row.recap_storage_path) {
@@ -198,22 +201,51 @@
         });
         actions.append(recap);
       }
-      for (const [statusValue,label] of [['approved','Одобрить'],['rejected','Отклонить']]) {
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = statusValue === 'approved' ? 'button button-small' : 'button button-small button-ghost';
-        button.textContent = label;
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          try {
-            await window.SpringVisionAPI.request('admin_review_submission',{submissionId:row.id,status:statusValue,comment:comment.value.trim()});
-            toast(statusValue === 'approved' ? 'Заявка одобрена, право жюри выдано.' : 'Заявка отклонена.');
-            await loadAdminApplications();
-            await loadAppState();
-          } catch (error) { adminError(error); button.disabled = false; }
-        });
-        actions.append(button);
+      if (row.status === 'pending') {
+        for (const [statusValue,label] of [['approved','Одобрить'],['rejected','Отклонить']]) {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = statusValue === 'approved' ? 'button button-small' : 'button button-small button-ghost';
+          button.textContent = label;
+          button.addEventListener('click', async () => {
+            button.disabled = true;
+            feedback.textContent = 'Сохраняем решение…';
+            try {
+              await window.SpringVisionAPI.request('admin_review_submission',{submissionId:row.id,status:statusValue,comment:comment.value.trim()});
+              row.status = statusValue;
+              status.textContent = statusValue === 'approved' ? 'Одобрена' : 'Отклонена';
+              feedback.textContent = statusValue === 'approved'
+                ? 'Заявка одобрена. Право жюри выдано на этот сезон.'
+                : 'Заявка отклонена.';
+              comment.disabled = true;
+              actions.querySelectorAll('button').forEach(item => {
+                if (item !== button && item.textContent !== 'Рекап') item.remove();
+              });
+              button.textContent = statusValue === 'approved' ? 'Одобрено' : 'Отклонено';
+              button.disabled = true;
+              button.className = 'button button-small';
+              try { await loadAppState(); } catch (refreshError) { console.error(refreshError); }
+            } catch (error) {
+              feedback.textContent = error instanceof Error ? error.message : 'Не удалось сохранить решение.';
+              button.disabled = false;
+            }
+          });
+          actions.append(button);
+        }
+      } else {
+        comment.disabled = true;
+        if (row.status === 'approved' || row.status === 'rejected') {
+          const decided = document.createElement('button');
+          decided.type = 'button';
+          decided.className = 'button button-small';
+          decided.textContent = row.status === 'approved' ? 'Одобрено' : 'Отклонено';
+          decided.disabled = true;
+          actions.append(decided);
+        }
+        feedback.textContent = row.status === 'approved'
+          ? 'Право жюри выдано для этого сезона.'
+          : row.status === 'rejected' ? 'Заявка уже отклонена.' : 'Эта заявка больше не рассматривается.';
       }
-      card.append(title,applicantInfo,status,comment,actions);
+      card.append(title,applicantInfo,status,comment,feedback,actions);
       list.append(card);
     });
   };
@@ -248,19 +280,64 @@
     if (!currentIsAdmin) { toast('Нет доступа к админ-панели.'); return; }
     try {
       if (section === 'applications') {
-        showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<select id="adminAppSeason" required></select></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
-        await fillSeasonSelect($('#adminAppSeason'));
+        showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<div class="season-select-wrap"><button type="button" id="adminAppSeasonTrigger" class="season-select-trigger" aria-expanded="false">Загружаем сезоны… <span>⌄</span></button><div id="adminAppSeasonMenu" class="season-select-menu" hidden></div><select id="adminAppSeason" class="season-select-native" required aria-hidden="true" tabindex="-1"></select></div></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
+        const appSeasons = await fillSeasonSelect($('#adminAppSeason'));
+        const seasonTrigger = $('#adminAppSeasonTrigger');
+        const seasonMenu = $('#adminAppSeasonMenu');
+        const seasonSelect = $('#adminAppSeason');
+        const closeSeasonMenu = () => { seasonMenu.hidden = true; seasonTrigger.setAttribute('aria-expanded','false'); };
+        seasonTrigger.addEventListener('click', () => {
+          const open = seasonMenu.hidden;
+          seasonMenu.hidden = !open;
+          seasonTrigger.setAttribute('aria-expanded',String(open));
+        });
+        appSeasons.forEach(season => {
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.className = 'season-select-option';
+          option.textContent = `#${season.season_number} — ${season.title}`;
+          option.addEventListener('click', () => {
+            seasonSelect.value = season.id;
+            seasonTrigger.innerHTML = '';
+            seasonTrigger.append(document.createTextNode(option.textContent));
+            const chevron = document.createElement('span'); chevron.textContent = '⌄'; seasonTrigger.append(chevron);
+            closeSeasonMenu();
+            seasonSelect.dispatchEvent(new Event('change',{bubbles:true}));
+          });
+          seasonMenu.append(option);
+        });
         $('#loadAdminApps').addEventListener('click',()=>loadAdminApplications().catch(adminError));
         $('#downloadRecaps').addEventListener('click',()=>downloadRecapsZip().catch(adminError));
-        $('#adminAppSeason').addEventListener('change',()=>loadAdminApplications().catch(adminError));
+        seasonSelect.addEventListener('change',()=>loadAdminApplications().catch(adminError));
+        if (appSeasons.length) {
+          seasonSelect.value = appSeasons[0].id;
+          seasonTrigger.innerHTML = '';
+          seasonTrigger.append(document.createTextNode(`#${appSeasons[0].season_number} — ${appSeasons[0].title}`));
+          const chevron = document.createElement('span'); chevron.textContent = '⌄'; seasonTrigger.append(chevron);
+          await loadAdminApplications();
+        } else {
+          seasonTrigger.textContent = 'Сезонов пока нет';
+          seasonTrigger.disabled = true;
+          const empty = document.createElement('p');
+          empty.className = 'admin-empty';
+          empty.textContent = 'Сезонов пока нет. Сначала создай сезон в разделе «Сезоны».';
+          $('#adminApplicationsList').append(empty);
+        }
       } else if (section === 'seasons') {
-        showAdminDialog('Управление сезонами',`<form id="createSeasonForm" class="admin-form"><h3>Создать сезон</h3><div class="admin-form-grid"><label>Номер сезона<input id="newSeasonNumber" type="number" min="1" required></label><label>Название<input id="newSeasonTitle" maxlength="160" required></label></div><label>Описание<textarea id="newSeasonDescription" rows="2"></textarea></label><label>URL логотипа<input id="newSeasonLogo" type="url" placeholder="https://…"></label><div class="admin-form-grid"><label>Начало регистрации<input id="newRegOpen" type="datetime-local"></label><label>Конец регистрации<input id="newRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="newJuryDeadline" type="datetime-local"></label><label>Дата конкурса<input id="newContestAt" type="datetime-local"></label></div><button class="button" type="submit">Создать сезон</button><p id="createSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><h3>Управление этапами и публикацией</h3><label>Сезон<select id="adminControlSeason"></select></label><form id="seasonControlsForm" class="admin-form"><label>Статус<select id="controlStatus"><option value="draft">Подготовка</option><option value="registration">Регистрация</option><option value="moderation">Модерация</option><option value="drawn">Жеребьёвка проведена</option><option value="jury_voting">Голосование жюри</option><option value="televoting">Телеголосование</option><option value="finished">Завершён</option><option value="archived">Архив</option></select></label><div class="admin-checks"><label><input type="checkbox" id="controlParticipants"> Опубликовать участников</label><label><input type="checkbox" id="controlDraw"> Опубликовать жеребьёвку</label><label><input type="checkbox" id="controlJuryOpen"> Открыть голосование жюри</label><label><input type="checkbox" id="controlJuryResults"> Показать результаты жюри</label><label><input type="checkbox" id="controlTelevoteOpen"> Открыть телеголосование</label><label><input type="checkbox" id="controlTelevoteResults"> Показать результаты телеголосования</label><label><input type="checkbox" id="controlOverallResults"> Показать общий результат</label></div><label>Ссылка на Twitch<input type="url" id="controlTwitch" placeholder="https://www.twitch.tv/…"></label><div class="admin-checks"><label><input type="checkbox" id="controlTwitchPublished"> Показывать трансляцию на сайте</label><label><input type="checkbox" id="controlRecordingPublished"> Опубликовать запись финала</label></div><div class="admin-inline-actions"><button type="submit" class="button button-small">Сохранить настройки</button><button type="button" id="adminDrawButton" class="button button-ghost button-small">Провести жеребьёвку</button></div><p id="seasonControlsMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><form id="recordingForm" class="admin-form"><h3>Запись финала</h3><label>Видео (до 50 МБ)<input id="recordingFile" type="file" accept="video/mp4,video/webm,video/quicktime" required></label><button class="button button-small" type="submit">Загрузить запись</button><p id="recordingMessage" class="admin-message" role="status"></p></form>`);
+        showAdminDialog('Управление сезонами',`<form id="createSeasonForm" class="admin-form"><h3>Создать сезон</h3><div class="admin-form-grid"><label>Номер сезона<input id="newSeasonNumber" type="number" min="1" required></label><label>Название<input id="newSeasonTitle" maxlength="160" required></label></div><label>Описание<textarea id="newSeasonDescription" rows="2"></textarea></label><label>URL логотипа<input id="newSeasonLogo" type="url" placeholder="https://…"></label><div class="admin-form-grid"><label>Начало регистрации<input id="newRegOpen" type="datetime-local"></label><label>Дедлайн регистрации<input id="newRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="newJuryDeadline" type="datetime-local"></label><label>Дедлайн телеголосования<input id="newTelevoteDeadline" type="datetime-local"></label><label>Дата конкурса<input id="newContestAt" type="datetime-local"></label></div><button class="button" type="submit">Создать сезон</button><p id="createSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><h3>Управление этапами и публикацией</h3><label>Сезон<select id="adminControlSeason"></select></label><form id="seasonControlsForm" class="admin-form"><label>Статус<select id="controlStatus"><option value="draft">Подготовка</option><option value="registration">Регистрация</option><option value="moderation">Модерация</option><option value="drawn">Жеребьёвка проведена</option><option value="jury_voting">Голосование жюри</option><option value="televoting">Телеголосование</option><option value="finished">Завершён</option><option value="archived">Архив</option></select></label><div class="admin-form-grid"><label>Начало регистрации<input id="controlRegOpen" type="datetime-local"></label><label>Дедлайн регистрации<input id="controlRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="controlJuryDeadline" type="datetime-local"></label><label>Дедлайн телеголосования<input id="controlTelevoteDeadline" type="datetime-local"></label><label>Дата конкурса<input id="controlContestAt" type="datetime-local"></label></div><div class="admin-checks"><label><input type="checkbox" id="controlParticipants"> Опубликовать участников</label><label><input type="checkbox" id="controlDraw"> Опубликовать жеребьёвку</label><label><input type="checkbox" id="controlJuryOpen"> Открыть голосование жюри</label><label><input type="checkbox" id="controlJuryResults"> Показать результаты жюри</label><label><input type="checkbox" id="controlTelevoteOpen"> Открыть телеголосование</label><label><input type="checkbox" id="controlTelevoteResults"> Показать результаты телеголосования</label><label><input type="checkbox" id="controlOverallResults"> Показать общий результат</label></div><label>Ссылка на Twitch<input type="url" id="controlTwitch" placeholder="https://www.twitch.tv/…"></label><div class="admin-checks"><label><input type="checkbox" id="controlTwitchPublished"> Показывать трансляцию на сайте</label><label><input type="checkbox" id="controlRecordingPublished"> Опубликовать запись финала</label></div><div class="admin-inline-actions"><button type="submit" class="button button-small">Сохранить настройки</button><button type="button" id="adminDrawButton" class="button button-ghost button-small">Провести жеребьёвку</button><button type="button" id="adminCloseJuryButton" class="button button-ghost button-small">Завершить жюривойт</button></div><p id="seasonControlsMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><form id="deleteSeasonForm" class="admin-form"><h3>Удаление сезона</h3><p>Удалит сезон, заявки, голоса и загруженные файлы. Действие необратимо.</p><label>Для подтверждения введи точное название выбранного сезона<input id="deleteSeasonConfirm" autocomplete="off" placeholder="Название сезона" required></label><button type="submit" class="button button-ghost button-small">Удалить сезон навсегда</button><p id="deleteSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><form id="recordingForm" class="admin-form"><h3>Запись финала</h3><label>Видео (до 50 МБ)<input id="recordingFile" type="file" accept="video/mp4,video/webm,video/quicktime" required></label><button class="button button-small" type="submit">Загрузить запись</button><p id="recordingMessage" class="admin-message" role="status"></p></form>`);
         const seasons = await fillSeasonSelect($('#adminControlSeason'));
-        const toLocal = value => value ? new Date(value).toISOString().slice(0,16) : '';
+        const toLocal = value => { if (!value) return ''; const d = new Date(value); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); };
         const fillControls = () => {
           const selected = seasons.find(s=>s.id===$('#adminControlSeason').value);
           if (!selected) return;
           $('#controlStatus').value = selected.status;
+          $('#controlRegOpen').value = toLocal(selected.registration_opens_at);
+          $('#controlRegClose').value = toLocal(selected.registration_closes_at);
+          $('#controlJuryDeadline').value = toLocal(selected.jury_deadline);
+          $('#controlTelevoteDeadline').value = toLocal(selected.televote_deadline);
+          $('#controlContestAt').value = toLocal(selected.contest_at);
+          $('#deleteSeasonConfirm').value = '';
+          $('#deleteSeasonMessage').textContent = '';
           $('#controlParticipants').checked = selected.participant_list_published;
           $('#controlDraw').checked = selected.draw_published;
           $('#controlJuryOpen').checked = selected.jury_voting_open;
@@ -283,11 +360,12 @@
               seasonNumber:Number($('#newSeasonNumber').value),title:$('#newSeasonTitle').value.trim(),
               description:$('#newSeasonDescription').value.trim(),logoUrl:$('#newSeasonLogo').value.trim()||null,
               registrationOpensAt:iso('#newRegOpen'),registrationClosesAt:iso('#newRegClose'),
-              juryDeadline:iso('#newJuryDeadline'),contestAt:iso('#newContestAt')
+              juryDeadline:iso('#newJuryDeadline'),televoteDeadline:iso('#newTelevoteDeadline'),contestAt:iso('#newContestAt')
             });
             out.textContent='Сезон создан.';
             toast('Сезон создан');
             const updated=await fillSeasonSelect($('#adminControlSeason'));
+            seasons.splice(0,seasons.length,...updated);
             if(updated.length){$('#adminControlSeason').value=updated[0].id;fillControls();}
             await loadAppState();
           } catch(error){out.textContent=error.message||'Ошибка создания сезона.';}
@@ -299,7 +377,10 @@
             const seasonId=await selectedSeason('#adminControlSeason');
             if ($('#controlTwitchPublished').checked && !$('#controlTwitch').value.trim()) throw new Error('Укажи ссылку на Twitch перед публикацией трансляции.');
             await window.SpringVisionAPI.request('admin_set_season',{
-              seasonId,status:$('#controlStatus').value,participant_list_published:$('#controlParticipants').checked,
+              seasonId,status:$('#controlStatus').value,
+              registration_opens_at:iso('#controlRegOpen'),registration_closes_at:iso('#controlRegClose'),
+              jury_deadline:iso('#controlJuryDeadline'),televote_deadline:iso('#controlTelevoteDeadline'),contest_at:iso('#controlContestAt'),
+              participant_list_published:$('#controlParticipants').checked,
               draw_published:$('#controlDraw').checked,jury_voting_open:$('#controlJuryOpen').checked,
               jury_results_published:$('#controlJuryResults').checked,televote_open:$('#controlTelevoteOpen').checked,
               televote_results_published:$('#controlTelevoteResults').checked,overall_results_published:$('#controlOverallResults').checked,
@@ -307,9 +388,49 @@
               twitch_published:$('#controlTwitchPublished').checked,
               recording_published:$('#controlRecordingPublished').checked
             });
-            out.textContent='Настройки сохранены.';
+            out.textContent='Настройки и дедлайны сохранены.';
+            const currentId=$('#adminControlSeason').value;
+            const refreshed=await fillSeasonSelect($('#adminControlSeason'));
+            seasons.splice(0,seasons.length,...refreshed);
+            $('#adminControlSeason').value=currentId;
+            fillControls();
             await loadAppState();
           } catch(error){out.textContent=error.message||'Не удалось сохранить настройки.';}
+        });
+        $('#adminCloseJuryButton').addEventListener('click',async()=>{
+          const selected=seasons.find(s=>s.id===$('#adminControlSeason').value);
+          if(!selected) return;
+          if(!window.confirm('Завершить жюривойт сезона «'+selected.title+'»? Не проголосовавшим странам будут назначены случайные баллы. Уже поданные голоса сохранятся.')) return;
+          const out=$('#seasonControlsMessage');
+          try {
+            $('#adminCloseJuryButton').disabled=true;
+            const result=await window.SpringVisionAPI.request('admin_close_jury',{seasonId:selected.id});
+            out.textContent='Жюривойт завершён. Случайные оценки назначены для '+result.randomBallots+' стран.'+(result.unableToAssign ? ' Не удалось назначить оценки: '+result.unableToAssign+'.' : '');
+            const refreshed=await fillSeasonSelect($('#adminControlSeason'));
+            seasons.splice(0,seasons.length,...refreshed);
+            $('#adminControlSeason').value=selected.id;
+            fillControls();
+            await loadAppState();
+          } catch(error){out.textContent=error.message||'Не удалось завершить жюривойт.';}
+          finally { $('#adminCloseJuryButton').disabled=false; }
+        });
+        $('#deleteSeasonForm').addEventListener('submit',async event=>{
+          event.preventDefault();
+          const selected=seasons.find(s=>s.id===$('#adminControlSeason').value);
+          const out=$('#deleteSeasonMessage');
+          if(!selected){out.textContent='Сначала выбери сезон.';return;}
+          if($('#deleteSeasonConfirm').value.trim()!==selected.title){out.textContent='Название не совпадает. Сезон не удалён.';return;}
+          if(!window.confirm('Последнее подтверждение: удалить сезон «'+selected.title+'» со всеми заявками и голосами?')) return;
+          try {
+            const result=await window.SpringVisionAPI.request('admin_delete_season',{seasonId:selected.id,confirmTitle:$('#deleteSeasonConfirm').value.trim()});
+            out.textContent=result.storageWarning ? 'Сезон удалён, но не все файлы удалось очистить: '+result.storageWarning : 'Сезон удалён.';
+            toast('Сезон удалён');
+            const refreshed=await fillSeasonSelect($('#adminControlSeason'));
+            seasons.splice(0,seasons.length,...refreshed);
+            if(refreshed.length){$('#adminControlSeason').value=refreshed[0].id;fillControls();}
+            else {$('#adminControlSeason').replaceChildren();$('#deleteSeasonConfirm').value='';}
+            await loadAppState();
+          } catch(error){out.textContent=error.message||'Не удалось удалить сезон.';}
         });
         $('#adminDrawButton').addEventListener('click',async()=>{
           try { const seasonId=await selectedSeason('#adminControlSeason'); const result=await window.SpringVisionAPI.request('admin_draw',{seasonId}); $('#seasonControlsMessage').textContent=`Жеребьёвка создана: ${result.count} участников. Публикация выключена.`; await loadAppState(); }
@@ -641,8 +762,36 @@
           if (parts[0] === 'videos' && parts[1]) player.src = `https://player.twitch.tv/?video=${encodeURIComponent(parts[1])}&parent=${parent}`;
           else if (parts[0] && !parts[0].startsWith('clip')) player.src = `https://player.twitch.tv/?channel=${encodeURIComponent(parts[0])}&parent=${parent}`;
         }
-        if (player.src) panel.append(player);
-        else {
+        if (player.src) {
+          panel.append(player);
+          const fullscreenRow = document.createElement('div');
+          fullscreenRow.className = 'final-media-actions';
+          const fullscreenButton = document.createElement('button');
+          fullscreenButton.type = 'button';
+          fullscreenButton.className = 'button';
+          fullscreenButton.textContent = 'Открыть на весь экран ⛶';
+          fullscreenButton.addEventListener('click', async () => {
+            try {
+              const requestFullscreen = player.requestFullscreen || player.webkitRequestFullscreen;
+              if (requestFullscreen) {
+                await requestFullscreen.call(player);
+                return;
+              }
+            } catch (error) {
+              console.warn('Полноэкранный режим недоступен во встроенном браузере:', error);
+            }
+            const openTwitch = () => {
+              if (window.Telegram?.WebApp?.openLink) {
+                window.Telegram.WebApp.openLink(season.twitch_url);
+              } else {
+                window.open(season.twitch_url, '_blank', 'noopener,noreferrer');
+              }
+            };
+            openTwitch();
+          });
+          fullscreenRow.append(fullscreenButton);
+          panel.append(fullscreenRow);
+        } else {
           const link = document.createElement('a');
           link.href = season.twitch_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
           link.className = 'button'; link.textContent = 'Открыть трансляцию на Twitch ↗';
@@ -699,8 +848,46 @@
       $('#seasonProgressLabel').textContent = statusLabels[currentSeason.status] || currentSeason.status;
       $('#seasonProgressBar').style.width = `${progress}%`;
       $('#seasonTitle').textContent = currentSeason.title;
+      const seasonLogo = $('#seasonLogo');
+      seasonLogo.onerror = () => { seasonLogo.hidden = true; seasonLogo.removeAttribute('src'); };
+      if (typeof currentSeason.logo_url === 'string' && currentSeason.logo_url.trim()) {
+        seasonLogo.src = currentSeason.logo_url.trim();
+        seasonLogo.hidden = false;
+      } else {
+        seasonLogo.hidden = true;
+        seasonLogo.removeAttribute('src');
+      }
       $('#seasonCardName').textContent = `SpringVision ${String(currentSeason.season_number).padStart(2,'0')}`;
       $('#seasonDescription').textContent = currentSeason.description || 'Участвуй в сезоне SpringVision: заявка, рекапы, жюри и результаты.';
+      const deadlineRows = [
+        ['Начало регистрации', currentSeason.registration_opens_at],
+        ['Дедлайн регистрации', currentSeason.registration_closes_at],
+        ['Дедлайн голосования жюри', currentSeason.jury_deadline],
+        ['Дедлайн телеголосования', currentSeason.televote_deadline],
+        ['Дата конкурса', currentSeason.contest_at],
+      ].filter(([,value]) => value);
+      const deadlinesBox = $('#seasonDeadlines');
+      deadlinesBox.replaceChildren();
+      if (deadlineRows.length) {
+        const heading = document.createElement('strong');
+        heading.textContent = 'Расписание и дедлайны';
+        deadlinesBox.append(heading);
+        const list = document.createElement('div');
+        list.className = 'season-deadlines-list';
+        deadlineRows.forEach(([label,value]) => {
+          const row = document.createElement('div');
+          row.className = 'season-deadline-row';
+          const name = document.createElement('span');
+          name.textContent = label;
+          const date = document.createElement('time');
+          date.dateTime = new Date(value).toISOString();
+          date.textContent = new Date(value).toLocaleString('ru-RU',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Moscow'});
+          row.append(name,date);
+          list.append(row);
+        });
+        deadlinesBox.append(list);
+        deadlinesBox.hidden = false;
+      } else deadlinesBox.hidden = true;
       $('#applyButton').disabled = currentSeason.status !== 'registration';
       $('#applyButton').textContent = currentSeason.status === 'registration' ? 'Подать заявку →' : 'Регистрация закрыта';
       renderCountryOptions(countrySearch.value);
