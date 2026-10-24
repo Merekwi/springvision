@@ -170,6 +170,12 @@
       const title = document.createElement('strong');
       const country = sortedCountries.find(c => c.code === row.country_code);
       title.textContent = `${country?.name || row.country_code.toUpperCase()} — ${row.artist} / ${row.song_title}`;
+      const applicant = row.profiles || {};
+      const applicantInfo = document.createElement('p');
+      applicantInfo.className = 'admin-applicant';
+      const applicantName = applicant.display_name || 'Пользователь Telegram';
+      const applicantHandle = applicant.telegram_username ? `@${applicant.telegram_username}` : 'username не указан';
+      applicantInfo.textContent = `Заявитель: ${applicantName} · ${applicantHandle}${applicant.telegram_id ? ` · ID: ${applicant.telegram_id}` : ''}`;
       const status = document.createElement('span');
       status.className = 'admin-submission-status';
       status.textContent = ({pending:'На рассмотрении',approved:'Одобрена',rejected:'Отклонена',withdrawn:'Отозвана'})[row.status] || row.status;
@@ -207,7 +213,7 @@
         });
         actions.append(button);
       }
-      card.append(title,status,comment,actions);
+      card.append(title,applicantInfo,status,comment,actions);
       list.append(card);
     });
   };
