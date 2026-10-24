@@ -124,3 +124,13 @@
 .season-deadline-row span{color:var(--muted)}
 .season-deadline-row time{text-align:right;color:#d8ceff;font-weight:700}
 @media(max-width:520px){.season-deadline-row{flex-direction:column;gap:1px}.season-deadline-row time{text-align:left}}
+
+
+/* Performer photo shown beside the country heart in voting rows */
+.vote-performer-preview { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; margin: 0 2px; }
+.vote-performer-preview[hidden] { display: none; }
+.vote-heart-flag { width: 36px; height: 36px; object-fit: contain; }
+.vote-performer-photo { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent, #e6c15a); background: rgba(255,255,255,.08); }
+.vote-row { gap: 10px; }
+.vote-row select { min-width: 0; flex: 1; }
+@media (max-width: 560px) { .vote-row { flex-wrap: wrap; } .vote-row select { flex-basis: 100%; width: 100%; } .vote-performer-preview { margin-left: auto; } }
