@@ -83,3 +83,10 @@
 .final-media-panel h3{margin:0 0 1rem}
 .twitch-player{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:.85rem;background:#09090f}
 .final-recording{display:block;width:100%;max-height:70vh;border-radius:.85rem;background:#09090f}
+
+.account-content{display:grid;gap:.75rem}
+.account-content h3{margin:.5rem 0 0}
+.account-submission{padding:1rem;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:1rem;background:var(--card,rgba(255,255,255,.035))}
+.account-submission p{margin:.5rem 0 0}
+.account-role,.account-submission-status{font-weight:700}
+.account-rejection-comment{color:var(--danger,#ff8b9b)}
