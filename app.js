@@ -492,8 +492,11 @@
     const songTitle = $('#songInput').value.trim();
     const performanceUrl = $('#youtubeInput').value.trim();
     const file = $('#videoInput').files[0];
+    const performerPhoto = $('#performerPhotoInput').files[0];
     const message = $('#applicationMessage');
-    if (!countryCode || !artist || !songTitle || !performanceUrl || !file) { message.textContent = 'Заполни все поля.'; return; }
+    if (!countryCode || !artist || !songTitle || !performanceUrl || !file || !performerPhoto) { message.textContent = 'Заполни все поля и обязательно загрузи фото исполнителя.'; return; }
+    if (!performerPhoto.type.startsWith('image/')) { message.textContent = 'Фото исполнителя должно быть изображением.'; return; }
+    if (performerPhoto.size > 10 * 1024 * 1024) { message.textContent = 'Фото исполнителя больше 10 МБ.'; return; }
     let parsed;
     try { parsed = new URL(performanceUrl); } catch { message.textContent = 'Проверь ссылку: она должна быть корректным URL.'; return; }
     if (!['http:','https:'].includes(parsed.protocol)) { message.textContent = 'Разрешены только ссылки http:// и https://.'; return; }
@@ -515,7 +518,7 @@
     try {
       await window.SpringVisionAPI.requestForm('submit_application', {
         seasonId: currentSeason.id, countryCode, artist, songTitle, performanceUrl
-      }, 'recap', file);
+      }, [{ name: 'recap', file }, { name: 'performerPhoto', file: performerPhoto }]);
       message.textContent = 'Заявка отправлена на модерацию. Страна зарезервирована за вашей заявкой.';
       toast('Заявка отправлена');
       $('#applicationForm').reset();
@@ -664,6 +667,17 @@
         label.className = 'vote-row';
         const pointLabel = document.createElement('strong');
         pointLabel.textContent = `${points} баллов`;
+        const preview = document.createElement('span');
+        preview.className = 'vote-performer-preview';
+        preview.hidden = true;
+        const heart = document.createElement('img');
+        heart.className = 'heart-flag vote-heart-flag';
+        heart.alt = '';
+        const portrait = document.createElement('img');
+        portrait.className = 'vote-performer-photo';
+        portrait.alt = 'Фото исполнителя';
+        portrait.loading = 'lazy';
+        preview.append(heart, portrait);
         const select = document.createElement('select');
         select.required = true;
         select.dataset.points = String(points);
@@ -678,8 +692,27 @@
           if (isJury && !allowOwn && item.id === state.ownSubmissionId) option.disabled = true;
           select.append(option);
         });
+        const updatePreview = () => {
+          const item = submissions.find(s => s.id === select.value);
+          preview.hidden = !item;
+          if (!item) {
+            heart.removeAttribute('src');
+            portrait.removeAttribute('src');
+            return;
+          }
+          heart.src = `assets/flags/heart/${item.country_code}.svg`;
+          heart.alt = countryName(item.country_code);
+          if (item.performer_photo_url) {
+            portrait.src = item.performer_photo_url;
+            portrait.hidden = false;
+          } else {
+            portrait.removeAttribute('src');
+            portrait.hidden = true;
+          }
+        };
+        select.addEventListener('change', updatePreview);
         selects.push(select);
-        label.append(pointLabel,select);
+        label.append(pointLabel,preview,select);
         form.append(label);
       });
       const refreshOptions = () => {
