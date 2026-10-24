@@ -213,7 +213,7 @@ Deno.serve(async (request) => {
         if (canSeeParticipants) {
           const result = await db.from("submissions")
             .select("id,country_code,artist,song_title,performance_url,recap_storage_path,performance_order,status")
-            .eq("season_id", season.id).eq("status", "approved").order("performance_order", { ascending: true, nullsFirst: false });
+            .eq("season_id", season.id).eq("status", "approved").order(season.draw_published || isAdmin ? "performance_order" : "created_at", { ascending: true, nullsFirst: false });
           if (result.error) throw new Error(result.error.message);
           submissions = result.data || [];
         }
@@ -271,9 +271,11 @@ Deno.serve(async (request) => {
         }
         const submissionsWithUrls = await Promise.all(submissions.map(async (row) => {
           const path = typeof row.recap_storage_path === "string" ? row.recap_storage_path : "";
-          if (!path) return { ...row, recap_url: null };
+          const publicOrder = isAdmin || season.draw_published;
+          const safeRow = { ...row, performance_order: publicOrder ? row.performance_order : null };
+          if (!path) return { ...safeRow, recap_url: null };
           const signed = await db.storage.from(BUCKET).createSignedUrl(path, 3600);
-          return { ...row, recap_url: signed.data?.signedUrl || null };
+          return { ...safeRow, recap_url: signed.data?.signedUrl || null };
         }));
         return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, ownSubmissionId, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
       }
