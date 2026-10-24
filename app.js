@@ -216,8 +216,10 @@
                 ? 'Заявка одобрена. Право жюри выдано на этот сезон.'
                 : 'Заявка отклонена.';
               comment.disabled = true;
-              actions.querySelectorAll('button').forEach(item => { if (item !== button) item.remove(); });
-              button.remove();
+              actions.querySelectorAll('button').forEach(item => { if (item !== button && item.textContent !== 'Рекап') item.remove(); });
+              button.textContent = statusValue === 'approved' ? 'Одобрено' : 'Отклонено';
+              button.disabled = true;
+              button.className = 'button button-small';
               await loadAdminApplications();
               try { await loadAppState(); } catch (refreshError) { console.error(refreshError); }
             } catch (error) {
@@ -229,6 +231,14 @@
         }
       } else {
         comment.disabled = true;
+        if (row.status === 'approved' || row.status === 'rejected') {
+          const decided = document.createElement('button');
+          decided.type = 'button';
+          decided.className = 'button button-small';
+          decided.textContent = row.status === 'approved' ? 'Одобрено' : 'Отклонено';
+          decided.disabled = true;
+          actions.append(decided);
+        }
         feedback.textContent = row.status === 'approved'
           ? 'Право жюри выдано для этого сезона.'
           : row.status === 'rejected' ? 'Заявка уже отклонена.' : 'Эта заявка больше не рассматривается.';
