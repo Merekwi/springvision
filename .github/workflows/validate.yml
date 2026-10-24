@@ -1,0 +1,31 @@
+name: Validate SpringVision
+
+on:
+  push:
+    branches:
+      - feature/springvision-backend
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check frontend JavaScript syntax
+        run: |
+          node --check app.js
+          node --check api.js
+      - name: Type-check Supabase Edge Function
+        run: deno check supabase/functions/api/index.ts
+      - name: Verify heart flag assets
+        run: |
+          test "$(find assets/flags/heart -maxdepth 1 -type f -name '*.svg' | wc -l)" -ge 150
+          test -f assets/flags/heart/ru.svg
+          test -f assets/flags/heart/gb.svg
+          test -f assets/flags/heart/fi.svg
