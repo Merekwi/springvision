@@ -33,6 +33,8 @@ create table if not exists public.seasons (
  televote_results_published boolean not null default false,
  overall_results_published boolean not null default false,
  twitch_url text,
+ twitch_published boolean not null default false,
+ recording_published boolean not null default false,
  recording_storage_path text,
  combined_recap_storage_path text,
  created_by uuid references public.profiles(id) on delete set null,
