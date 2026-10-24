@@ -211,16 +211,18 @@
             feedback.textContent = 'Сохраняем решение…';
             try {
               await window.SpringVisionAPI.request('admin_review_submission',{submissionId:row.id,status:statusValue,comment:comment.value.trim()});
+              row.status = statusValue;
               status.textContent = statusValue === 'approved' ? 'Одобрена' : 'Отклонена';
               feedback.textContent = statusValue === 'approved'
                 ? 'Заявка одобрена. Право жюри выдано на этот сезон.'
                 : 'Заявка отклонена.';
               comment.disabled = true;
-              actions.querySelectorAll('button').forEach(item => { if (item !== button && item.textContent !== 'Рекап') item.remove(); });
+              actions.querySelectorAll('button').forEach(item => {
+                if (item !== button && item.textContent !== 'Рекап') item.remove();
+              });
               button.textContent = statusValue === 'approved' ? 'Одобрено' : 'Отклонено';
               button.disabled = true;
               button.className = 'button button-small';
-              await loadAdminApplications();
               try { await loadAppState(); } catch (refreshError) { console.error(refreshError); }
             } catch (error) {
               feedback.textContent = error instanceof Error ? error.message : 'Не удалось сохранить решение.';
