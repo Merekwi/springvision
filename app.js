@@ -114,7 +114,7 @@
   };
   const openDialog = (id) => { const dialog = document.getElementById(id); if (dialog && !dialog.open) dialog.showModal(); };
   $$('[data-close]').forEach(button => button.addEventListener('click', () => document.getElementById(button.dataset.close)?.close()));
-  $('#accountButton').addEventListener('click', () => openDialog('accountDialog'));
+  $('#accountButton').addEventListener('click', () => { openDialog('accountDialog'); loadAccount().catch(error => { $('#accountContent').textContent = error.message || 'Не удалось загрузить профиль.'; }); });
   $('#applyButton').addEventListener('click', () => {
     $('#applicationMessage').textContent = '';
     $('#applicationForm').reset();
@@ -375,6 +375,63 @@
       submitButton.textContent = 'Отправить заявку →';
     }
   });
+
+  async function loadAccount() {
+    const content = $('#accountContent');
+    content.replaceChildren();
+    const loading = document.createElement('p');
+    loading.textContent = 'Загружаем профиль и заявки…';
+    content.append(loading);
+    const [me, mine] = await Promise.all([
+      window.SpringVisionAPI.request('me'),
+      window.SpringVisionAPI.request('my_submissions')
+    ]);
+    content.replaceChildren();
+    const profile = me.profile || {};
+    const heading = document.createElement('h3');
+    heading.textContent = profile.display_name || 'Участник SpringVision';
+    const details = document.createElement('p');
+    details.textContent = profile.telegram_username ? '@' + profile.telegram_username : 'Аккаунт Telegram подтверждён';
+    content.append(heading, details);
+    if (me.isAdmin) {
+      const admin = document.createElement('p');
+      admin.className = 'account-role';
+      admin.textContent = 'Доступ администратора';
+      content.append(admin);
+    }
+    const title = document.createElement('h3');
+    title.textContent = 'Мои заявки';
+    content.append(title);
+    const submissions = mine.submissions || [];
+    if (!submissions.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'У тебя пока нет заявок на участие.';
+      content.append(empty);
+      return;
+    }
+    const labels = {pending:'На рассмотрении',approved:'Одобрена',rejected:'Отклонена',withdrawn:'Отозвана'};
+    submissions.forEach(item => {
+      const card = document.createElement('article');
+      card.className = 'account-submission';
+      const country = sortedCountries.find(c => c.code === item.country_code);
+      const name = document.createElement('strong');
+      name.textContent = `${country?.name || item.country_code.toUpperCase()} — ${item.artist} / ${item.song_title}`;
+      const season = document.createElement('p');
+      const seasonData = item.seasons;
+      season.textContent = seasonData ? `Сезон #${seasonData.season_number}: ${seasonData.title}` : 'Сезон SpringVision';
+      const status = document.createElement('p');
+      status.className = 'account-submission-status';
+      status.textContent = labels[item.status] || item.status;
+      card.append(name,season,status);
+      if (item.status === 'rejected' && item.moderation_comment) {
+        const comment = document.createElement('p');
+        comment.className = 'account-rejection-comment';
+        comment.textContent = 'Комментарий организатора: ' + item.moderation_comment;
+        card.append(comment);
+      }
+      content.append(card);
+    });
+  }
 
   const statusLabels = {
     draft: 'Подготовка сезона', registration: 'Регистрация открыта', moderation: 'Модерация заявок',
