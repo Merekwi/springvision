@@ -116,3 +116,11 @@
 
 .final-media-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .final-media-actions .button{cursor:pointer}
+
+.season-deadlines{margin:18px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:#ffffff04}
+.season-deadlines>strong{display:block;margin-bottom:10px;font-size:12px;color:#e6e2fa}
+.season-deadlines-list{display:grid;gap:8px}
+.season-deadline-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;font-size:10px;line-height:1.6}
+.season-deadline-row span{color:var(--muted)}
+.season-deadline-row time{text-align:right;color:#d8ceff;font-weight:700}
+@media(max-width:520px){.season-deadline-row{flex-direction:column;gap:1px}.season-deadline-row time{text-align:left}}
