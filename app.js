@@ -769,6 +769,15 @@
       $('#seasonProgressLabel').textContent = statusLabels[currentSeason.status] || currentSeason.status;
       $('#seasonProgressBar').style.width = `${progress}%`;
       $('#seasonTitle').textContent = currentSeason.title;
+      const seasonLogo = $('#seasonLogo');
+      seasonLogo.onerror = () => { seasonLogo.hidden = true; seasonLogo.removeAttribute('src'); };
+      if (typeof currentSeason.logo_url === 'string' && currentSeason.logo_url.trim()) {
+        seasonLogo.src = currentSeason.logo_url.trim();
+        seasonLogo.hidden = false;
+      } else {
+        seasonLogo.hidden = true;
+        seasonLogo.removeAttribute('src');
+      }
       $('#seasonCardName').textContent = `SpringVision ${String(currentSeason.season_number).padStart(2,'0')}`;
       $('#seasonDescription').textContent = currentSeason.description || 'Участвуй в сезоне SpringVision: заявка, рекапы, жюри и результаты.';
       $('#applyButton').disabled = currentSeason.status !== 'registration';
