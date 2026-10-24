@@ -2,7 +2,6 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const config = window.SPRINGVISION_CONFIG || { demoMode: false };
   let currentSeason = null;
   let currentProfile = null;
   let currentIsAdmin = false;
