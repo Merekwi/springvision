@@ -249,7 +249,7 @@
         $('#downloadRecaps').addEventListener('click',()=>downloadRecapsZip().catch(adminError));
         $('#adminAppSeason').addEventListener('change',()=>loadAdminApplications().catch(adminError));
       } else if (section === 'seasons') {
-        showAdminDialog('Управление сезонами',`<form id="createSeasonForm" class="admin-form"><h3>Создать сезон</h3><div class="admin-form-grid"><label>Номер сезона<input id="newSeasonNumber" type="number" min="1" required></label><label>Название<input id="newSeasonTitle" maxlength="160" required></label></div><label>Описание<textarea id="newSeasonDescription" rows="2"></textarea></label><label>URL логотипа<input id="newSeasonLogo" type="url" placeholder="https://…"></label><div class="admin-form-grid"><label>Начало регистрации<input id="newRegOpen" type="datetime-local"></label><label>Конец регистрации<input id="newRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="newJuryDeadline" type="datetime-local"></label><label>Дата конкурса<input id="newContestAt" type="datetime-local"></label></div><button class="button" type="submit">Создать сезон</button><p id="createSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><h3>Управление этапами и публикацией</h3><label>Сезон<select id="adminControlSeason"></select></label><form id="seasonControlsForm" class="admin-form"><label>Статус<select id="controlStatus"><option value="draft">Подготовка</option><option value="registration">Регистрация</option><option value="moderation">Модерация</option><option value="drawn">Жеребьёвка проведена</option><option value="jury_voting">Голосование жюри</option><option value="televoting">Телеголосование</option><option value="finished">Завершён</option><option value="archived">Архив</option></select></label><div class="admin-checks"><label><input type="checkbox" id="controlParticipants"> Опубликовать участников</label><label><input type="checkbox" id="controlDraw"> Опубликовать жеребьёвку</label><label><input type="checkbox" id="controlJuryOpen"> Открыть голосование жюри</label><label><input type="checkbox" id="controlJuryResults"> Показать результаты жюри</label><label><input type="checkbox" id="controlTelevoteOpen"> Открыть телеголосование</label><label><input type="checkbox" id="controlTelevoteResults"> Показать результаты телеголосования</label><label><input type="checkbox" id="controlOverallResults"> Показать общий результат</label></div><label>Ссылка на Twitch<input type="url" id="controlTwitch" placeholder="https://www.twitch.tv/…"></label><div class="admin-inline-actions"><button type="submit" class="button button-small">Сохранить настройки</button><button type="button" id="adminDrawButton" class="button button-ghost button-small">Провести жеребьёвку</button></div><p id="seasonControlsMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><form id="recordingForm" class="admin-form"><h3>Запись финала</h3><label>Видео (до 50 МБ)<input id="recordingFile" type="file" accept="video/mp4,video/webm,video/quicktime" required></label><button class="button button-small" type="submit">Загрузить запись</button><p id="recordingMessage" class="admin-message" role="status"></p></form>`);
+        showAdminDialog('Управление сезонами',`<form id="createSeasonForm" class="admin-form"><h3>Создать сезон</h3><div class="admin-form-grid"><label>Номер сезона<input id="newSeasonNumber" type="number" min="1" required></label><label>Название<input id="newSeasonTitle" maxlength="160" required></label></div><label>Описание<textarea id="newSeasonDescription" rows="2"></textarea></label><label>URL логотипа<input id="newSeasonLogo" type="url" placeholder="https://…"></label><div class="admin-form-grid"><label>Начало регистрации<input id="newRegOpen" type="datetime-local"></label><label>Конец регистрации<input id="newRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="newJuryDeadline" type="datetime-local"></label><label>Дата конкурса<input id="newContestAt" type="datetime-local"></label></div><button class="button" type="submit">Создать сезон</button><p id="createSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><h3>Управление этапами и публикацией</h3><label>Сезон<select id="adminControlSeason"></select></label><form id="seasonControlsForm" class="admin-form"><label>Статус<select id="controlStatus"><option value="draft">Подготовка</option><option value="registration">Регистрация</option><option value="moderation">Модерация</option><option value="drawn">Жеребьёвка проведена</option><option value="jury_voting">Голосование жюри</option><option value="televoting">Телеголосование</option><option value="finished">Завершён</option><option value="archived">Архив</option></select></label><div class="admin-checks"><label><input type="checkbox" id="controlParticipants"> Опубликовать участников</label><label><input type="checkbox" id="controlDraw"> Опубликовать жеребьёвку</label><label><input type="checkbox" id="controlJuryOpen"> Открыть голосование жюри</label><label><input type="checkbox" id="controlJuryResults"> Показать результаты жюри</label><label><input type="checkbox" id="controlTelevoteOpen"> Открыть телеголосование</label><label><input type="checkbox" id="controlTelevoteResults"> Показать результаты телеголосования</label><label><input type="checkbox" id="controlOverallResults"> Показать общий результат</label></div><label>Ссылка на Twitch<input type="url" id="controlTwitch" placeholder="https://www.twitch.tv/…"></label><div class="admin-checks"><label><input type="checkbox" id="controlTwitchPublished"> Показывать трансляцию на сайте</label><label><input type="checkbox" id="controlRecordingPublished"> Опубликовать запись финала</label></div><div class="admin-inline-actions"><button type="submit" class="button button-small">Сохранить настройки</button><button type="button" id="adminDrawButton" class="button button-ghost button-small">Провести жеребьёвку</button></div><p id="seasonControlsMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><form id="recordingForm" class="admin-form"><h3>Запись финала</h3><label>Видео (до 50 МБ)<input id="recordingFile" type="file" accept="video/mp4,video/webm,video/quicktime" required></label><button class="button button-small" type="submit">Загрузить запись</button><p id="recordingMessage" class="admin-message" role="status"></p></form>`);
         const seasons = await fillSeasonSelect($('#adminControlSeason'));
         const toLocal = value => value ? new Date(value).toISOString().slice(0,16) : '';
         const fillControls = () => {
@@ -264,6 +264,8 @@
           $('#controlTelevoteResults').checked = selected.televote_results_published;
           $('#controlOverallResults').checked = selected.overall_results_published;
           $('#controlTwitch').value = selected.twitch_url || '';
+          $('#controlTwitchPublished').checked = Boolean(selected.twitch_published);
+          $('#controlRecordingPublished').checked = Boolean(selected.recording_published);
         };
         $('#adminControlSeason').addEventListener('change',fillControls);
         if (seasons.length) { $('#adminControlSeason').value = seasons[0].id; fillControls(); }
@@ -295,7 +297,9 @@
               draw_published:$('#controlDraw').checked,jury_voting_open:$('#controlJuryOpen').checked,
               jury_results_published:$('#controlJuryResults').checked,televote_open:$('#controlTelevoteOpen').checked,
               televote_results_published:$('#controlTelevoteResults').checked,overall_results_published:$('#controlOverallResults').checked,
-              twitch_url:$('#controlTwitch').value.trim()||null
+              twitch_url:$('#controlTwitch').value.trim()||null,
+              twitch_published:$('#controlTwitchPublished').checked,
+              recording_published:$('#controlRecordingPublished').checked
             });
             out.textContent='Настройки сохранены.';
             await loadAppState();
@@ -307,7 +311,7 @@
         });
         $('#recordingForm').addEventListener('submit',async event=>{
           event.preventDefault(); const out=$('#recordingMessage');
-          try { const seasonId=await selectedSeason('#adminControlSeason'); const file=$('#recordingFile').files[0]; if(!file) throw new Error('Выбери видеофайл.'); await window.SpringVisionAPI.requestForm('admin_upload_recording',{seasonId},'file',file); out.textContent='Запись загружена в приватное хранилище.'; }
+          try { const seasonId=await selectedSeason('#adminControlSeason'); const file=$('#recordingFile').files[0]; if(!file) throw new Error('Выбери видеофайл.'); await window.SpringVisionAPI.requestForm('admin_upload_recording',{seasonId},'file',file); out.textContent='Запись загружена в приватное хранилище. Чтобы показать её посетителям, включи «Опубликовать запись финала» и сохрани настройки сезона.'; }
           catch(error){out.textContent=error.message||'Ошибка загрузки.';}
         });
       } else if (section === 'roles') {
@@ -545,6 +549,60 @@
     section.hidden=!shown;
   };
 
+  const renderFinalMedia = (season) => {
+    const section = $('#finalMedia');
+    const content = $('#finalMediaContent');
+    content.replaceChildren();
+    if (!season || (!season.twitch_published && !season.recording_url)) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    if (season.twitch_published && season.twitch_url) {
+      const panel = document.createElement('article');
+      panel.className = 'final-media-panel';
+      const title = document.createElement('h3');
+      title.textContent = 'Прямая трансляция';
+      panel.append(title);
+      try {
+        const parsed = new URL(season.twitch_url);
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        const player = document.createElement('iframe');
+        player.className = 'twitch-player';
+        player.title = 'Трансляция SpringVision на Twitch';
+        player.allow = 'autoplay; fullscreen';
+        player.allowFullscreen = true;
+        player.loading = 'lazy';
+        const parent = encodeURIComponent(window.location.hostname);
+        if (parsed.hostname.toLowerCase() === 'www.twitch.tv' || parsed.hostname.toLowerCase() === 'twitch.tv') {
+          if (parts[0] === 'videos' && parts[1]) player.src = `https://player.twitch.tv/?video=${encodeURIComponent(parts[1])}&parent=${parent}`;
+          else if (parts[0] && !parts[0].startsWith('clip')) player.src = `https://player.twitch.tv/?channel=${encodeURIComponent(parts[0])}&parent=${parent}`;
+        }
+        if (player.src) panel.append(player);
+        else {
+          const link = document.createElement('a');
+          link.href = season.twitch_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          link.className = 'button'; link.textContent = 'Открыть трансляцию на Twitch ↗';
+          panel.append(link);
+        }
+      } catch {}
+      content.append(panel);
+    }
+    if (season.recording_url) {
+      const panel = document.createElement('article');
+      panel.className = 'final-media-panel';
+      const title = document.createElement('h3');
+      title.textContent = 'Запись финала';
+      const video = document.createElement('video');
+      video.className = 'final-recording';
+      video.controls = true;
+      video.preload = 'metadata';
+      video.src = season.recording_url;
+      panel.append(title,video);
+      content.append(panel);
+    }
+  };
+
   async function loadAppState() {
     if (!window.SpringVisionAPI?.configured()) {
       $('#seasonStatus').textContent = 'Сервер не подключён';
@@ -553,6 +611,7 @@
       $('#applyButton').disabled = true;
       $('#voting').hidden = true;
       renderRecaps([]);
+      renderFinalMedia(null);
       return;
     }
     try {
@@ -567,6 +626,7 @@
         $('#applyButton').disabled = true;
         $('#voting').hidden = true;
         renderRecaps([]);
+        renderFinalMedia(null);
         return;
       }
       currentSeason = state.season;
@@ -583,6 +643,7 @@
       renderCountryOptions(countrySearch.value);
       renderRecaps(state.submissions || []);
       renderVoting(state);
+      renderFinalMedia(currentSeason);
       if (state.isAdmin) $('#admin').hidden = false;
     } catch (error) {
       $('#seasonStatus').textContent = 'Нет соединения с сервером';
