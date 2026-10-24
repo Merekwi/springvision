@@ -39,10 +39,10 @@ async function verifyTelegramInitData(initData: string, botToken: string) {
     .join("\n");
 
   const encoder = new TextEncoder();
-  const webAppDataKey = await crypto.subtle.importKey(
-    "raw", encoder.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  const botTokenKey = await crypto.subtle.importKey(
+    "raw", encoder.encode(botToken), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
   );
-  const secret = await crypto.subtle.sign("HMAC", webAppDataKey, encoder.encode(botToken));
+  const secret = await crypto.subtle.sign("HMAC", botTokenKey, encoder.encode("WebAppData"));
   const signingKey = await crypto.subtle.importKey(
     "raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
   );
