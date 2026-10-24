@@ -183,6 +183,9 @@
       comment.placeholder = 'Комментарий (обязателен по желанию при отклонении)';
       comment.value = row.moderation_comment || '';
       comment.rows = 2;
+      const feedback = document.createElement('p');
+      feedback.className = 'admin-review-feedback';
+      feedback.setAttribute('role','status');
       const actions = document.createElement('div');
       actions.className = 'admin-inline-actions';
       if (row.recap_storage_path) {
@@ -198,22 +201,39 @@
         });
         actions.append(recap);
       }
-      for (const [statusValue,label] of [['approved','Одобрить'],['rejected','Отклонить']]) {
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = statusValue === 'approved' ? 'button button-small' : 'button button-small button-ghost';
-        button.textContent = label;
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          try {
-            await window.SpringVisionAPI.request('admin_review_submission',{submissionId:row.id,status:statusValue,comment:comment.value.trim()});
-            toast(statusValue === 'approved' ? 'Заявка одобрена, право жюри выдано.' : 'Заявка отклонена.');
-            await loadAdminApplications();
-            await loadAppState();
-          } catch (error) { adminError(error); button.disabled = false; }
-        });
-        actions.append(button);
+      if (row.status === 'pending') {
+        for (const [statusValue,label] of [['approved','Одобрить'],['rejected','Отклонить']]) {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = statusValue === 'approved' ? 'button button-small' : 'button button-small button-ghost';
+          button.textContent = label;
+          button.addEventListener('click', async () => {
+            button.disabled = true;
+            feedback.textContent = 'Сохраняем решение…';
+            try {
+              await window.SpringVisionAPI.request('admin_review_submission',{submissionId:row.id,status:statusValue,comment:comment.value.trim()});
+              status.textContent = statusValue === 'approved' ? 'Одобрена' : 'Отклонена';
+              feedback.textContent = statusValue === 'approved'
+                ? 'Заявка одобрена. Право жюри выдано на этот сезон.'
+                : 'Заявка отклонена.';
+              comment.disabled = true;
+              actions.querySelectorAll('button').forEach(item => { if (item !== button) item.remove(); });
+              button.remove();
+              await loadAdminApplications();
+              try { await loadAppState(); } catch (refreshError) { console.error(refreshError); }
+            } catch (error) {
+              feedback.textContent = error instanceof Error ? error.message : 'Не удалось сохранить решение.';
+              button.disabled = false;
+            }
+          });
+          actions.append(button);
+        }
+      } else {
+        comment.disabled = true;
+        feedback.textContent = row.status === 'approved'
+          ? 'Право жюри выдано для этого сезона.'
+          : row.status === 'rejected' ? 'Заявка уже отклонена.' : 'Эта заявка больше не рассматривается.';
       }
-      card.append(title,applicantInfo,status,comment,actions);
+      card.append(title,applicantInfo,status,comment,feedback,actions);
       list.append(card);
     });
   };
