@@ -8,6 +8,7 @@
   <title>SpringVision — музыкальный конкурс</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="config.js"></script>
   <script src="api.js"></script>
   <script defer src="app.js"></script>
@@ -79,7 +80,7 @@
   <select id="countrySelect" required class="country-native-select" aria-label="Страна"><option value="">Выбери страну</option></select>
 </label><label>Исполнитель<input id="artistInput" required maxlength="120" placeholder="Имя исполнителя"></label><label>Название песни<input id="songInput" required maxlength="160" placeholder="Название песни"></label><label>Ссылка на выступление или клип<input id="youtubeInput" type="url" required placeholder="https://www.youtube.com/…"></label><label>30-секундный рекап-файл<input id="videoInput" type="file" accept="video/mp4,video/webm,video/quicktime" required><small>Ограничение в этой демоверсии: до 50 МБ. После подключения сервера видео будет загружено в хранилище конкурса.</small></label><div class="form-actions"><button type="button" class="button button-ghost" data-close="applicationDialog">Отмена</button><button class="button" type="submit">Проверить заявку →</button></div><div class="form-message" id="applicationMessage" role="status"></div></form></dialog>
   <dialog id="accountDialog" class="modal modal-narrow"><div class="modal-heading"><div><div class="eyebrow">SPRINGVISION</div><h2>Мой аккаунт</h2></div><button class="icon-button" type="button" data-close="accountDialog" aria-label="Закрыть">×</button></div><p>Вход и сезонные роли активируются после настройки серверной проверки Telegram.</p><button class="button button-full" data-close="accountDialog">Понятно</button></dialog>
-  <dialog id="adminDialog" class="modal modal-narrow"><div class="modal-heading"><div><div class="eyebrow">ЦЕНТР УПРАВЛЕНИЯ</div><h2 id="adminDialogTitle">Раздел</h2></div><button class="icon-button" type="button" data-close="adminDialog" aria-label="Закрыть">×</button></div><p id="adminDialogText"></p><button class="button button-full" data-close="adminDialog">Закрыть</button></dialog>
+  <dialog id="adminDialog" class="modal modal-admin"><div class="modal-heading"><div><div class="eyebrow">ЦЕНТР УПРАВЛЕНИЯ</div><h2 id="adminDialogTitle">Раздел</h2></div><button class="icon-button" type="button" data-close="adminDialog" aria-label="Закрыть">×</button></div><div id="adminDialogContent" class="admin-dialog-content"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
