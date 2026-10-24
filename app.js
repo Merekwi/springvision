@@ -248,15 +248,44 @@
     if (!currentIsAdmin) { toast('Нет доступа к админ-панели.'); return; }
     try {
       if (section === 'applications') {
-        showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<select id="adminAppSeason" required></select></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
+        showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<div class="season-select-wrap"><button type="button" id="adminAppSeasonTrigger" class="season-select-trigger" aria-expanded="false">Загружаем сезоны… <span>⌄</span></button><div id="adminAppSeasonMenu" class="season-select-menu" hidden></div><select id="adminAppSeason" class="season-select-native" required aria-hidden="true" tabindex="-1"></select></div></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
         const appSeasons = await fillSeasonSelect($('#adminAppSeason'));
+        const seasonTrigger = $('#adminAppSeasonTrigger');
+        const seasonMenu = $('#adminAppSeasonMenu');
+        const seasonSelect = $('#adminAppSeason');
+        const closeSeasonMenu = () => { seasonMenu.hidden = true; seasonTrigger.setAttribute('aria-expanded','false'); };
+        seasonTrigger.addEventListener('click', () => {
+          const open = seasonMenu.hidden;
+          seasonMenu.hidden = !open;
+          seasonTrigger.setAttribute('aria-expanded',String(open));
+        });
+        appSeasons.forEach(season => {
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.className = 'season-select-option';
+          option.textContent = `#${season.season_number} — ${season.title}`;
+          option.addEventListener('click', () => {
+            seasonSelect.value = season.id;
+            seasonTrigger.innerHTML = '';
+            seasonTrigger.append(document.createTextNode(option.textContent));
+            const chevron = document.createElement('span'); chevron.textContent = '⌄'; seasonTrigger.append(chevron);
+            closeSeasonMenu();
+            seasonSelect.dispatchEvent(new Event('change',{bubbles:true}));
+          });
+          seasonMenu.append(option);
+        });
         $('#loadAdminApps').addEventListener('click',()=>loadAdminApplications().catch(adminError));
         $('#downloadRecaps').addEventListener('click',()=>downloadRecapsZip().catch(adminError));
-        $('#adminAppSeason').addEventListener('change',()=>loadAdminApplications().catch(adminError));
+        seasonSelect.addEventListener('change',()=>loadAdminApplications().catch(adminError));
         if (appSeasons.length) {
-          $('#adminAppSeason').value = appSeasons[0].id;
+          seasonSelect.value = appSeasons[0].id;
+          seasonTrigger.innerHTML = '';
+          seasonTrigger.append(document.createTextNode(`#${appSeasons[0].season_number} — ${appSeasons[0].title}`));
+          const chevron = document.createElement('span'); chevron.textContent = '⌄'; seasonTrigger.append(chevron);
           await loadAdminApplications();
         } else {
+          seasonTrigger.textContent = 'Сезонов пока нет';
+          seasonTrigger.disabled = true;
           const empty = document.createElement('p');
           empty.className = 'admin-empty';
           empty.textContent = 'Сезонов пока нет. Сначала создай сезон в разделе «Сезоны».';
