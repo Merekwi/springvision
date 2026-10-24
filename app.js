@@ -623,7 +623,7 @@
     if (!approved.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.innerHTML = '<div class="empty-icon">▷</div><h3>Рекапы появятся здесь</h3><p>Утверждённые рекапы будут показаны по порядку жеребьёвки после публикации.</p>';
+      empty.innerHTML = drawOnly ? '<div class="empty-icon">♡</div><h3>Нет опубликованных стран</h3><p>После публикации жеребьёвки здесь появится порядок выступления.</p>' : '<div class="empty-icon">▷</div><h3>Рекапы появятся здесь</h3><p>Утверждённые рекапы будут показаны по порядку жеребьёвки после публикации.</p>';
       list.append(empty);
       return;
     }
