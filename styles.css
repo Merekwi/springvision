@@ -92,3 +92,35 @@
 .account-rejection-comment{color:var(--danger,#ff8b9b)}
 
 .admin-applicant{margin:.5rem 0;color:var(--muted,#aaa);font-size:.9rem;overflow-wrap:anywhere}
+
+
+/* Explicit season picker for moderation */
+.season-select-wrap{position:relative;margin-top:6px}
+.season-select-native{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;left:0;bottom:0}
+.season-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:11px 13px;border:1px solid #ffffff24;border-radius:11px;background:#0e0e1d;color:#fff;text-align:left;font:600 12px Manrope,sans-serif;cursor:pointer}
+.season-select-trigger span{flex-shrink:0;color:#c1a8ff;font-size:17px}
+.season-select-trigger:focus-visible,.season-select-option:focus-visible{outline:2px solid #a18cff;outline-offset:2px}
+.season-select-menu{position:absolute;z-index:1000;top:calc(100% + 6px);left:0;right:0;max-height:240px;overflow:auto;padding:5px;border:1px solid #ffffff20;border-radius:12px;background:#17162b;box-shadow:0 16px 42px #0009}
+.season-select-menu[hidden]{display:none!important}
+.season-select-option{display:block;width:100%;padding:11px 10px;border:0;border-radius:8px;background:transparent;color:#f6f4ff;text-align:left;font:12px Manrope,sans-serif;cursor:pointer}
+.season-select-option:hover{background:#8b7cff24}
+
+
+.admin-review-feedback{margin:0;color:#c8baff;font-size:11px;line-height:1.7}
+.admin-review-feedback:empty{display:none}
+.admin-submission-status{display:inline-flex;align-items:center;margin-top:8px}
+.admin-submission textarea:disabled{opacity:.7}
+
+.season-logo{display:block;width:100%;max-height:260px;object-fit:contain;margin:18px 0 22px;border-radius:16px;background:rgba(255,255,255,.035)}.season-logo[hidden]{display:none}
+
+
+.final-media-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.final-media-actions .button{cursor:pointer}
+
+.season-deadlines{margin:18px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:#ffffff04}
+.season-deadlines>strong{display:block;margin-bottom:10px;font-size:12px;color:#e6e2fa}
+.season-deadlines-list{display:grid;gap:8px}
+.season-deadline-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;font-size:10px;line-height:1.6}
+.season-deadline-row span{color:var(--muted)}
+.season-deadline-row time{text-align:right;color:#d8ceff;font-weight:700}
+@media(max-width:520px){.season-deadline-row{flex-direction:column;gap:1px}.season-deadline-row time{text-align:left}}
