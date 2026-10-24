@@ -68,7 +68,7 @@ async function sendTelegram(botToken: string, telegramId: number, text: string) 
   if (!response.ok || !data.ok) throw new Error(data.description || "Telegram sendMessage failed");
 }
 
-async function runJuryCron(db: ReturnType<typeof createClient>, botToken: string) {
+async function runJuryCron(db: any, botToken: string) {
   const now = Date.now();
   const seasonsResult = await db.from("seasons").select("id,title,jury_deadline").eq("status","jury_voting").eq("jury_voting_open",true);
   if (seasonsResult.error) throw new Error(seasonsResult.error.message);
@@ -175,7 +175,6 @@ Deno.serve(async (request) => {
   }
   const profile = profileResult.data;
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
-  const action = String(body.action || "");
 
   const requireAdmin = () => {
     if (!isAdmin) throw new Error("Недостаточно прав: требуется администратор.");
