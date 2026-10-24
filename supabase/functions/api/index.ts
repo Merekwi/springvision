@@ -151,7 +151,7 @@ Deno.serve(async (request) => {
         const seasonResult = await db.from("seasons").select("*").not("status", "eq", "archived").order("season_number", { ascending: false }).limit(1).maybeSingle();
         if (seasonResult.error) throw new Error(seasonResult.error.message);
         const season = seasonResult.data;
-        if (!season) return json({ profile, season: null, submissions: [], juryResults: null, televoteResults: null, overallResults: null });
+        if (!season) return json({ profile, isAdmin, season: null, submissions: [], countries: [], reservedCountryCodes: [], juryResults: null, televoteResults: null, overallResults: null });
         const juryRole = await db.from("season_jury").select("user_id").eq("season_id", season.id).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
         const canSeeParticipants = isAdmin || season.participant_list_published || Boolean(juryRole.data);
         let submissions: Record<string, unknown>[] = [];
