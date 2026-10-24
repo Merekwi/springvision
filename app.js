@@ -425,6 +425,9 @@
     }
     try {
       const state = await window.SpringVisionAPI.request('public_state');
+      currentProfile = state.profile || null;
+      currentIsAdmin = Boolean(state.isAdmin);
+      $('#admin').hidden = !currentIsAdmin;
       if (!state.season) {
         $('#seasonStatus').textContent = 'Сезон ещё не создан';
         $('#seasonTitle').textContent = 'SpringVision';
@@ -434,9 +437,6 @@
         return;
       }
       currentSeason = state.season;
-      currentProfile = state.profile || null;
-      currentIsAdmin = Boolean(state.isAdmin);
-      $('#admin').hidden = !currentIsAdmin;
       reservedCountryCodes = new Set(state.reservedCountryCodes || []);
       $('#seasonStatus').textContent = statusLabels[currentSeason.status] || currentSeason.status;
       $('#seasonTitle').textContent = currentSeason.title;
