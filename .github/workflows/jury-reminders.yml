@@ -1,0 +1,31 @@
+name: SpringVision jury reminders
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder and deadline processor
+        env:
+          SUPABASE_URL: ${{ secrets.SPRINGVISION_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SPRINGVISION_SUPABASE_ANON_KEY }}
+          SPRINGVISION_CRON_SECRET: ${{ secrets.SPRINGVISION_CRON_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_ANON_KEY"
+          test -n "$SPRINGVISION_CRON_SECRET"
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/functions/v1/api" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: $SPRINGVISION_CRON_SECRET" \
+            --data '{"action":"cron_jury_reminders"}'
