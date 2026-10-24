@@ -254,6 +254,43 @@ Deno.serve(async (request) => {
         return json({ submissions: result.data || [] });
       }
 
+      case "admin_list_seasons": {
+        requireAdmin();
+        const result = await db.from("seasons").select("*").order("season_number", { ascending: false });
+        if (result.error) throw new Error(result.error.message);
+        return json({ seasons: result.data || [] });
+      }
+
+      case "admin_set_role": {
+        if (profile.role !== "super_admin") throw new Error("Назначать администраторов может только главный администратор.");
+        const telegramId = Number(body.telegramId);
+        const role = String(body.role || "");
+        if (!Number.isSafeInteger(telegramId) || telegramId < 1 || !["user","admin"].includes(role)) throw new Error("Укажите Telegram ID и роль user/admin.");
+        if (telegramId === Number(profile.telegram_id)) throw new Error("Нельзя изменить собственную роль главного администратора.");
+        const target = await db.from("profiles").select("id,role").eq("telegram_id",telegramId).maybeSingle();
+        if (target.error || !target.data) throw new Error("Пользователь не найден. Он должен хотя бы один раз открыть мини-приложение.");
+        if (target.data.role === "super_admin") throw new Error("Роль главного администратора нельзя изменить этим действием.");
+        const result = await db.from("profiles").update({role}).eq("id",target.data.id).select("telegram_id,telegram_username,display_name,role").single();
+        if (result.error) throw new Error(result.error.message);
+        await writeAudit("user_role_changed","profile",target.data.id,{role});
+        return json({ profile: result.data });
+      }
+
+      case "admin_recap_downloads": {
+        requireAdmin();
+        const seasonId = String(body.seasonId || "");
+        if (!seasonId) throw new Error("Не указан сезон.");
+        const result = await db.from("submissions").select("id,country_code,artist,song_title,performance_order,recap_storage_path")
+          .eq("season_id",seasonId).eq("status","approved").order("performance_order",{ascending:true,nullsFirst:false});
+        if (result.error) throw new Error(result.error.message);
+        const recaps = await Promise.all((result.data || []).map(async (row) => {
+          if (!row.recap_storage_path) return {...row,recap_url:null};
+          const signed = await db.storage.from(BUCKET).createSignedUrl(row.recap_storage_path,3600);
+          return {...row,recap_url:signed.data?.signedUrl || null};
+        }));
+        return json({ recaps });
+      }
+
       case "admin_create_season": {
         requireAdmin();
         const seasonNumber = Number(body.seasonNumber);
@@ -317,6 +354,9 @@ Deno.serve(async (request) => {
         if (!Object.keys(patch).length) throw new Error("Нет параметров для обновления.");
         const result = await db.from("seasons").update(patch).eq("id", seasonId).select("*").single();
         if (result.error) throw new Error("Не удалось обновить сезон: " + result.error.message);
+        if (patch.status === "finished" || patch.status === "archived") {
+          await db.from("season_jury").update({revoked_at:new Date().toISOString()}).eq("season_id",seasonId).is("revoked_at",null);
+        }
         await writeAudit("season_settings_updated", "season", seasonId, patch);
         return json({ season: result.data });
       }
