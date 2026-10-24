@@ -312,7 +312,7 @@ Deno.serve(async (request) => {
       }
 
       case "my_submissions": {
-        const result = await db.from("submissions").select("id,season_id,country_code,artist,song_title,status,moderation_comment,created_at")
+        const result = await db.from("submissions").select("id,season_id,country_code,artist,song_title,status,moderation_comment,created_at,seasons(title,season_number)")
           .eq("user_id", profile.id).order("created_at", { ascending: false });
         if (result.error) throw new Error(result.error.message);
         return json({ submissions: result.data || [] });
