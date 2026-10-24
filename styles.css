@@ -90,3 +90,5 @@
 .account-submission p{margin:.5rem 0 0}
 .account-role,.account-submission-status{font-weight:700}
 .account-rejection-comment{color:var(--danger,#ff8b9b)}
+
+.admin-applicant{margin:.5rem 0;color:var(--muted,#aaa);font-size:.9rem;overflow-wrap:anywhere}
