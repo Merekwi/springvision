@@ -68,6 +68,53 @@ async function sendTelegram(botToken: string, telegramId: number, text: string) 
   if (!response.ok || !data.ok) throw new Error(data.description || "Telegram sendMessage failed");
 }
 
+async function runJuryCron(db: ReturnType<typeof createClient>, botToken: string) {
+  const now = Date.now();
+  const seasonsResult = await db.from("seasons").select("id,title,jury_deadline").eq("status","jury_voting").eq("jury_voting_open",true);
+  if (seasonsResult.error) throw new Error(seasonsResult.error.message);
+  let remindersSent = 0, remindersFailed = 0, randomBallots = 0, closedSeasons = 0;
+  for (const season of seasonsResult.data || []) {
+    const juriesResult = await db.from("season_jury").select("user_id,submission_id").eq("season_id",season.id).is("revoked_at",null);
+    const submissionsResult = await db.from("submissions").select("id,user_id").eq("season_id",season.id).eq("status","approved");
+    const votesResult = await db.from("jury_votes").select("juror_id").eq("season_id",season.id);
+    if (juriesResult.error || submissionsResult.error || votesResult.error) throw new Error("Не удалось проверить состояние жюри.");
+    const juries = juriesResult.data || [];
+    const submissions = submissionsResult.data || [];
+    const voted = new Set((votesResult.data || []).map(row => row.juror_id));
+    const deadlinePassed = Boolean(season.jury_deadline && now >= Date.parse(season.jury_deadline));
+    for (const juror of juries) {
+      if (voted.has(juror.user_id)) continue;
+      if (deadlinePassed) {
+        const ownId = juror.submission_id || submissions.find(row => row.user_id === juror.user_id)?.id || null;
+        const eligible = submissions.filter(row => row.id !== ownId);
+        for (let i=eligible.length-1;i>0;i--) {
+          const j=crypto.getRandomValues(new Uint32Array(1))[0]%(i+1);
+          [eligible[i],eligible[j]]=[eligible[j],eligible[i]];
+        }
+        if (eligible.length < 10) continue;
+        const ballot = await db.from("jury_votes").insert(POINTS.map((points,index)=>({
+          season_id:season.id,juror_id:juror.user_id,target_submission_id:eligible[index].id,points,is_random_fallback:true
+        })));
+        if (!ballot.error) randomBallots++;
+        else if (ballot.error.code !== "23505") throw new Error("Не удалось создать резервный голос жюри: "+ballot.error.message);
+      } else {
+        const profileResult=await db.from("profiles").select("telegram_id").eq("id",juror.user_id).maybeSingle();
+        if (!profileResult.data?.telegram_id) continue;
+        try {
+          await sendTelegram(botToken,Number(profileResult.data.telegram_id),`Напоминание SpringVision: вы ещё не отправили оценки жюри для сезона «${season.title}». Дедлайн: ${season.jury_deadline ? new Date(season.jury_deadline).toLocaleString("ru-RU",{timeZone:"Europe/Moscow"}) : "не установлен"}.`);
+          remindersSent++;
+        } catch { remindersFailed++; }
+      }
+    }
+    if (deadlinePassed) {
+      await db.from("seasons").update({jury_voting_open:false}).eq("id",season.id);
+      await db.from("audit_log").insert({actor_id:null,action:"jury_deadline_closed",entity_type:"season",entity_id:season.id,details:{random_ballots:randomBallots}});
+      closedSeasons++;
+    }
+  }
+  return json({ok:true,remindersSent,remindersFailed,randomBallots,closedSeasons});
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Используйте POST." }, 405);
@@ -93,6 +140,16 @@ Deno.serve(async (request) => {
     return json({ error: "Некорректное тело запроса." }, 400);
   }
 
+  const action = String(body.action || "");
+  const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  if (action === "cron_jury_reminders") {
+    const cronSecret = Deno.env.get("SPRINGVISION_CRON_SECRET") || "";
+    const supplied = request.headers.get("x-cron-secret") || "";
+    if (!cronSecret || !supplied || !equalHex(supplied, cronSecret)) return json({ error: "Unauthorized cron request." }, 401);
+    try { return await runJuryCron(db, botToken); }
+    catch (error) { return json({ error: error instanceof Error ? error.message : "Ошибка фоновой задачи." }, 500); }
+  }
+
   const initData = String(request.headers.get("x-telegram-init-data") || body.initData || "");
   let telegramUser;
   try {
@@ -101,7 +158,6 @@ Deno.serve(async (request) => {
     return json({ error: error instanceof Error ? error.message : "Ошибка авторизации Telegram." }, 401);
   }
 
-  const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const isOwner = String(telegramUser.telegramId) === ownerIdRaw.trim();
   const profilePayload: Record<string, unknown> = {
     telegram_id: telegramUser.telegramId,
