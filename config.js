@@ -5,6 +5,5 @@
  */
 window.SPRINGVISION_CONFIG = {
   supabaseUrl: "",
-  supabaseAnonKey: "",
-  demoMode: false
+  supabaseAnonKey: ""
 };
