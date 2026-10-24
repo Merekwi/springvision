@@ -9,7 +9,7 @@
   const getInitData = () => telegram && typeof telegram.initData === 'string' ? telegram.initData : '';
   const configured = () => config.demoMode === false && Boolean(config.supabaseUrl && config.supabaseAnonKey);
   async function request(action, payload = {}) {
-    if (!configured()) throw new Error('Supabase ещё не подключён. Открыт демонстрационный режим.');
+    if (!configured()) throw new Error('Сервер конкурса не настроен: требуется подключить Supabase.');
     const initData = getInitData();
     if (!initData) throw new Error('Откройте SpringVision внутри Telegram, чтобы подтвердить аккаунт.');
     const response = await fetch(config.supabaseUrl.replace(/\/$/, '') + '/functions/v1/api', {
