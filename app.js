@@ -291,6 +291,7 @@
           const out=$('#seasonControlsMessage');
           try {
             const seasonId=await selectedSeason('#adminControlSeason');
+            if ($('#controlTwitchPublished').checked && !$('#controlTwitch').value.trim()) throw new Error('Укажи ссылку на Twitch перед публикацией трансляции.');
             await window.SpringVisionAPI.request('admin_set_season',{
               seasonId,status:$('#controlStatus').value,participant_list_published:$('#controlParticipants').checked,
               draw_published:$('#controlDraw').checked,jury_voting_open:$('#controlJuryOpen').checked,
@@ -609,7 +610,7 @@
     const section = $('#finalMedia');
     const content = $('#finalMediaContent');
     content.replaceChildren();
-    if (!season || (!season.twitch_published && !season.recording_url)) {
+    if (!season || (!(season.twitch_published && season.twitch_url) && !season.recording_url)) {
       section.hidden = true;
       return;
     }
