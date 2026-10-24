@@ -418,6 +418,133 @@
       list.append(card);
     });
   };
+  const renderVoting = (state) => {
+    const section = $('#voting');
+    const content = $('#votingContent');
+    const results = $('#resultsContent');
+    content.replaceChildren();
+    results.replaceChildren();
+    const submissions = state.submissions || [];
+    const countryName = code => sortedCountries.find(c=>c.code===code)?.name || String(code).toUpperCase();
+    const buildBallot = (title, action, allowOwn, isJury) => {
+      const panel = document.createElement('article');
+      panel.className = 'vote-panel';
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      const intro = document.createElement('p');
+      intro.textContent = isJury
+        ? 'Распредели 12, 10 и 8–1 баллов между десятью разными странами. За собственную заявку голосовать нельзя.'
+        : 'Распредели 12, 10 и 8–1 баллов между десятью разными странами. Один голос на аккаунт.';
+      panel.append(heading,intro);
+      if (submissions.length < 10 || (isJury && submissions.length < 11)) {
+        const notice = document.createElement('p');
+        notice.className = 'vote-notice';
+        notice.textContent = isJury ? 'Для голосования жюри нужны минимум 11 утверждённых участников, чтобы каждый мог не голосовать за себя.' : 'Для телеголосования нужны минимум 10 утверждённых участников.';
+        panel.append(notice);
+        content.append(panel);
+        return;
+      }
+      const form = document.createElement('form');
+      form.className = 'vote-form';
+      const selects = [];
+      POINTS.forEach(points => {
+        const label = document.createElement('label');
+        label.className = 'vote-row';
+        const pointLabel = document.createElement('strong');
+        pointLabel.textContent = `${points} баллов`;
+        const select = document.createElement('select');
+        select.required = true;
+        select.dataset.points = String(points);
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Выбери страну';
+        select.append(placeholder);
+        submissions.forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = `${countryName(item.country_code)} — ${item.artist} / ${item.song_title}`;
+          if (isJury && state.profile && item.user_id === state.profile.id && !allowOwn) option.disabled = true;
+          select.append(option);
+        });
+        selects.push(select);
+        label.append(pointLabel,select);
+        form.append(label);
+      });
+      const refreshOptions = () => {
+        const selected = new Set(selects.map(s=>s.value).filter(Boolean));
+        selects.forEach(select => [...select.options].forEach(option => {
+          if (!option.value) return;
+          const selectedElsewhere = selected.has(option.value) && select.value !== option.value;
+          option.disabled = selectedElsewhere || (isJury && !allowOwn && submissions.some(item=>item.id===option.value && item.user_id===state.profile?.id));
+        }));
+      };
+      selects.forEach(select => select.addEventListener('change',refreshOptions));
+      const button = document.createElement('button');
+      button.type = 'submit';
+      button.className = 'button';
+      button.textContent = isJury ? 'Сохранить оценки жюри' : 'Отправить телеголосование';
+      const status = document.createElement('p');
+      status.className = 'admin-message';
+      status.setAttribute('role','status');
+      form.append(button,status);
+      form.addEventListener('submit',async event=>{
+        event.preventDefault();
+        const chosen = selects.map(select=>({submissionId:select.value,points:Number(select.dataset.points)}));
+        if (chosen.some(v=>!v.submissionId) || new Set(chosen.map(v=>v.submissionId)).size!==10) {
+          status.textContent='Выбери десять разных стран.';
+          return;
+        }
+        button.disabled=true;
+        status.textContent='Сохраняем…';
+        try {
+          await window.SpringVisionAPI.request(action,{seasonId:currentSeason.id,votes:chosen});
+          status.textContent=isJury?'Оценки сохранены. До публикации результаты другим жюри не видны.':'Телеголосование принято. Повторно проголосовать нельзя.';
+          if(!isJury) button.disabled=true;
+          toast('Голос сохранён');
+        } catch(error) {
+          status.textContent=error.message||'Не удалось сохранить голос.';
+          button.disabled=false;
+        }
+      });
+      panel.append(form);
+      content.append(panel);
+    };
+    let shown = false;
+    if (state.juryEligible && currentSeason?.status==='jury_voting' && currentSeason.jury_voting_open) {
+      buildBallot('Голосование жюри','jury_submit',false,true);
+      shown = true;
+    }
+    if (currentSeason?.status==='televoting' && currentSeason.televote_open) {
+      buildBallot('Телеголосование','televote_submit',true,false);
+      shown = true;
+    }
+    const buildResults = (title, rows) => {
+      const panel = document.createElement('article');
+      panel.className='results-panel';
+      const heading=document.createElement('h3'); heading.textContent=title; panel.append(heading);
+      if (!rows?.length) {
+        const empty=document.createElement('p'); empty.textContent='Нет опубликованных данных.'; panel.append(empty);
+      } else {
+        const table=document.createElement('div'); table.className='results-list';
+        rows.forEach((row,index)=>{
+          const item=submissions.find(s=>s.id===row.submission_id);
+          if(!item) return;
+          const line=document.createElement('div'); line.className='results-row';
+          const rank=document.createElement('strong'); rank.textContent=String(index+1).padStart(2,'0');
+          const name=document.createElement('span'); name.textContent=`${countryName(item.country_code)} — ${item.artist} / ${item.song_title}`;
+          const score=document.createElement('b'); score.textContent=String(row.points);
+          line.append(rank,name,score); table.append(line);
+        });
+        panel.append(table);
+      }
+      results.append(panel);
+    };
+    if (state.juryResults) { buildResults('Результаты жюри',state.juryResults); shown=true; }
+    if (state.televoteResults) { buildResults('Результаты телеголосования',state.televoteResults); shown=true; }
+    if (state.overallResults) { buildResults('Итоговая таблица',state.overallResults); shown=true; }
+    section.hidden=!shown;
+  };
+
   async function loadAppState() {
     if (!window.SpringVisionAPI?.configured()) {
       $('#seasonStatus').textContent = 'Демонстрационный режим';
@@ -433,6 +560,7 @@
         $('#seasonTitle').textContent = 'SpringVision';
         $('#seasonCardName').textContent = 'Ожидаем новый сезон';
         $('#applyButton').disabled = true;
+        $('#voting').hidden = true;
         renderRecaps([]);
         return;
       }
@@ -446,6 +574,7 @@
       $('#applyButton').textContent = currentSeason.status === 'registration' ? 'Подать заявку →' : 'Регистрация закрыта';
       renderCountryOptions(countrySearch.value);
       renderRecaps(state.submissions || []);
+      renderVoting(state);
       if (state.isAdmin) $('#admin .status-pill').textContent = 'Администратор';
     } catch (error) {
       $('#seasonStatus').textContent = 'Нет соединения с сервером';
