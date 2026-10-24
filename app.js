@@ -711,8 +711,36 @@
           if (parts[0] === 'videos' && parts[1]) player.src = `https://player.twitch.tv/?video=${encodeURIComponent(parts[1])}&parent=${parent}`;
           else if (parts[0] && !parts[0].startsWith('clip')) player.src = `https://player.twitch.tv/?channel=${encodeURIComponent(parts[0])}&parent=${parent}`;
         }
-        if (player.src) panel.append(player);
-        else {
+        if (player.src) {
+          panel.append(player);
+          const fullscreenRow = document.createElement('div');
+          fullscreenRow.className = 'final-media-actions';
+          const fullscreenButton = document.createElement('button');
+          fullscreenButton.type = 'button';
+          fullscreenButton.className = 'button';
+          fullscreenButton.textContent = 'Открыть на весь экран ⛶';
+          fullscreenButton.addEventListener('click', async () => {
+            try {
+              const requestFullscreen = player.requestFullscreen || player.webkitRequestFullscreen;
+              if (requestFullscreen) {
+                await requestFullscreen.call(player);
+                return;
+              }
+            } catch (error) {
+              console.warn('Полноэкранный режим недоступен во встроенном браузере:', error);
+            }
+            const openTwitch = () => {
+              if (window.Telegram?.WebApp?.openLink) {
+                window.Telegram.WebApp.openLink(season.twitch_url);
+              } else {
+                window.open(season.twitch_url, '_blank', 'noopener,noreferrer');
+              }
+            };
+            openTwitch();
+          });
+          fullscreenRow.append(fullscreenButton);
+          panel.append(fullscreenRow);
+        } else {
           const link = document.createElement('a');
           link.href = season.twitch_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
           link.className = 'button'; link.textContent = 'Открыть трансляцию на Twitch ↗';
