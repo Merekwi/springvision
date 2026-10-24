@@ -35,7 +35,11 @@
     Object.entries(payload || {}).forEach(([key, value]) => {
       if (value !== undefined && value !== null) form.append(key, String(value));
     });
-    if (file && fileField) form.append(fileField, file, file.name);
+    if (Array.isArray(fileField)) {
+      fileField.forEach(item => { if (item?.file && item?.name) form.append(item.name, item.file, item.file.name); });
+    } else if (file && fileField) {
+      form.append(fileField, file, file.name);
+    }
     const response = await fetch(config.supabaseUrl.replace(/\/$/, '') + '/functions/v1/api', {
       method: 'POST',
       headers: { 'apikey': config.supabaseAnonKey, 'x-telegram-init-data': initData },
