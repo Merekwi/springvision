@@ -188,7 +188,7 @@ Deno.serve(async (request) => {
         const aggregate = (rows: Array<{target_submission_id:string;points:number}>) => {
           const map = new Map<string, number>();
           rows.forEach(row => map.set(row.target_submission_id, (map.get(row.target_submission_id) || 0) + row.points));
-          return submissions.map(s => ({ submission_id: s.id, points: map.get(String(s.id)) || 0 })).sort((a,b) => b.points - a.points);
+          return submissions.map(s => ({ submission_id: String(s.id), points: map.get(String(s.id)) || 0 })).sort((a,b) => b.points - a.points);
         };
         let juryResults = null, televoteResults = null, overallResults = null;
         if (season.jury_results_published) juryResults = aggregate(await totals("jury_votes"));
@@ -197,7 +197,7 @@ Deno.serve(async (request) => {
           const jury = aggregate(await totals("jury_votes"));
           const televote = aggregate(await totals("televote_points"));
           const sum = new Map<string, number>();
-          [...jury, ...televote].forEach(row => sum.set(row.submission_id, (sum.get(row.submission_id) || 0) + row.points));
+          [...jury, ...televote].forEach((row: { submission_id: string; points: number }) => sum.set(String(row.submission_id), (sum.get(String(row.submission_id)) || 0) + row.points));
           overallResults = [...sum.entries()].map(([submission_id, points]) => ({ submission_id, points })).sort((a,b) => b.points - a.points);
         }
         const reservedResult = await db.from("submissions").select("country_code").eq("season_id", season.id).in("status", ["pending","approved"]);
@@ -394,7 +394,8 @@ Deno.serve(async (request) => {
         const own = await db.from("submissions").select("id").eq("season_id",seasonId).eq("user_id",profile.id).eq("status","approved").maybeSingle();
         const targets = await db.from("submissions").select("id,user_id,status").eq("season_id",seasonId).in("id",votes.map(v=>v.submissionId)).eq("status","approved");
         if (targets.error || targets.data?.length !== 10) throw new Error("В голосовании есть участник, которого нет в утверждённом списке.");
-        if (own.data && votes.some(v=>v.submissionId===own.data.id)) throw new Error("Нельзя голосовать за собственную заявку.");
+        const ownSubmissionId = own.data?.id;
+        if (ownSubmissionId && votes.some(v=>v.submissionId===ownSubmissionId)) throw new Error("Нельзя голосовать за собственную заявку.");
         await db.from("jury_votes").delete().eq("season_id",seasonId).eq("juror_id",profile.id).eq("is_random_fallback",false);
         const saved = await db.from("jury_votes").insert(votes.map(v=>({season_id:seasonId,juror_id:profile.id,target_submission_id:v.submissionId,points:v.points})));
         if (saved.error) throw new Error("Не удалось сохранить голос жюри: " + saved.error.message);
