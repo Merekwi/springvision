@@ -229,7 +229,7 @@ Deno.serve(async (request) => {
           televote_open: season.televote_open, televote_results_published: season.televote_results_published,
           overall_results_published: season.overall_results_published,
           twitch_published: Boolean(season.twitch_published),
-          recording_url: null,
+          recording_url: null as string | null,
           twitch_url: season.twitch_published ? season.twitch_url : null,
         };
         const totals = async (table: "jury_votes" | "televote_points") => {
