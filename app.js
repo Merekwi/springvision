@@ -192,12 +192,22 @@
         const recap = document.createElement('button');
         recap.type = 'button'; recap.className = 'button button-ghost button-small'; recap.textContent = 'Рекап';
         recap.addEventListener('click', async () => {
+          const recapWindow = window.open('about:blank', '_blank');
+          if (recapWindow) recapWindow.opener = null;
           try {
             const response = await window.SpringVisionAPI.request('admin_recap_downloads',{seasonId});
             const item = (response.recaps || []).find(x => x.id === row.id);
-            if (item?.recap_url) window.open(item.recap_url,'_blank','noopener');
-            else toast('Не удалось получить ссылку на рекап.');
-          } catch (error) { adminError(error); }
+            if (item?.recap_url) {
+              if (recapWindow) recapWindow.location.href = item.recap_url;
+              else window.location.href = item.recap_url;
+            } else {
+              recapWindow?.close();
+              toast('Не удалось получить ссылку на рекап.');
+            }
+          } catch (error) {
+            recapWindow?.close();
+            adminError(error);
+          }
         });
         actions.append(recap);
       }
