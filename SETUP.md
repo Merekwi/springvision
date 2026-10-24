@@ -64,8 +64,7 @@ Workflow `.github/workflows/jury-reminders.yml` запускается кажд�
 ```js
 window.SPRINGVISION_CONFIG = {
   supabaseUrl: "https://YOUR_PROJECT_REF.supabase.co",
-  supabaseAnonKey: "YOUR_PUBLISHABLE_OR_ANON_KEY",
-  demoMode: false
+  supabaseAnonKey: "YOUR_PUBLISHABLE_OR_ANON_KEY"
 };
 ```
 
@@ -86,7 +85,7 @@ window.SPRINGVISION_CONFIG = {
 
 ## Контрольный запуск перед первым сезоном
 
-- Вставьте URL и публичный anon/publishable key именно SpringVision-проекта в `config.js` и установите `demoMode: false`.
+- Вставьте URL и публичный anon/publishable key именно SpringVision-проекта в `config.js`.
 - Примените миграцию, разверните Edge Function и создайте приватные Storage buckets согласно разделу установки.
 - Настройте GitHub Pages, укажите HTTPS URL в @BotFather и проверьте запуск внутри Telegram.
 - Создайте тестовый сезон и пройдите полный цикл: заявка → модерация → жеребьёвка → жюри → телеголосование → публикация результатов → загрузка записи финала.
