@@ -80,13 +80,13 @@ async function runJuryCron(db: any, botToken: string) {
     if (juriesResult.error || submissionsResult.error || votesResult.error) throw new Error("Не удалось проверить состояние жюри.");
     const juries = juriesResult.data || [];
     const submissions = submissionsResult.data || [];
-    const voted = new Set((votesResult.data || []).map(row => row.juror_id));
+    const voted = new Set((votesResult.data || []).map((row: any) => row.juror_id));
     const deadlinePassed = Boolean(season.jury_deadline && now >= Date.parse(season.jury_deadline));
     for (const juror of juries) {
       if (voted.has(juror.user_id)) continue;
       if (deadlinePassed) {
-        const ownId = juror.submission_id || submissions.find(row => row.user_id === juror.user_id)?.id || null;
-        const eligible = submissions.filter(row => row.id !== ownId);
+        const ownId = juror.submission_id || submissions.find((row: any) => row.user_id === juror.user_id)?.id || null;
+        const eligible = submissions.filter((row: any) => row.id !== ownId);
         for (let i=eligible.length-1;i>0;i--) {
           const j=crypto.getRandomValues(new Uint32Array(1))[0]%(i+1);
           [eligible[i],eligible[j]]=[eligible[j],eligible[i]];
