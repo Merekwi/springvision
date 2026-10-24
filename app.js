@@ -603,10 +603,22 @@
     drawn: 'Жеребьёвка проведена', jury_voting: 'Голосование жюри', televoting: 'Телеголосование',
     finished: 'Сезон завершён', archived: 'Архив'
   };
-  const renderRecaps = (submissions) => {
+  const renderRecaps = (submissions, season) => {
     const list = $('#recapList');
     const approved = submissions || [];
-    $('#recapCount').textContent = `${approved.length} роликов`;
+    const drawOnly = Boolean(season?.draw_published && season?.status === 'drawn');
+    const section = $('#recaps');
+    const heading = section.querySelector('.section-heading h2');
+    const subtitle = section.querySelector('.section-subtitle');
+    if (drawOnly) {
+      heading.textContent = 'Результаты жеребьёвки';
+      subtitle.textContent = 'Порядок выступления опубликован. До начала конкурса показаны только страны.';
+      $('#recapCount').textContent = `${approved.length} стран`;
+    } else {
+      heading.textContent = 'Рекапы конкурса';
+      subtitle.textContent = 'Ролики отображаются по порядку жеребьёвки — без склейки в единый видеофайл.';
+      $('#recapCount').textContent = `${approved.length} роликов`;
+    }
     list.replaceChildren();
     if (!approved.length) {
       const empty = document.createElement('div');
@@ -625,13 +637,19 @@
       const details = document.createElement('div');
       details.className = 'recap-item-details';
       const title = document.createElement('strong');
-      title.textContent = `${item.performance_order ? String(item.performance_order).padStart(2,'0') + '. ' : ''}${item.artist} — ${item.song_title}`;
-      const country = document.createElement('span');
       const found = sortedCountries.find(c => c.code === item.country_code);
-      country.textContent = found ? found.name : item.country_code.toUpperCase();
-      details.append(title,country);
+      const countryName = found ? found.name : item.country_code.toUpperCase();
+      title.textContent = drawOnly
+        ? `${item.performance_order ? String(item.performance_order).padStart(2,'0') + '. ' : ''}${countryName}`
+        : `${item.performance_order ? String(item.performance_order).padStart(2,'0') + '. ' : ''}${item.artist} — ${item.song_title}`;
+      details.append(title);
+      if (!drawOnly) {
+        const country = document.createElement('span');
+        country.textContent = countryName;
+        details.append(country);
+      }
       card.append(flag,details);
-      if (item.recap_url) {
+      if (!drawOnly && item.recap_url) {
         const link = document.createElement('a');
         link.href = item.recap_url;
         link.target = '_blank';
@@ -958,7 +976,7 @@
       $('#applyButton').disabled = currentSeason.status !== 'registration';
       $('#applyButton').textContent = currentSeason.status === 'registration' ? 'Подать заявку →' : 'Регистрация закрыта';
       renderCountryOptions(countrySearch.value);
-      renderRecaps(state.submissions || []);
+      renderRecaps(state.submissions || [], currentSeason);
       renderVoting(state);
       renderFinalMedia(currentSeason);
       if (state.isAdmin) $('#admin').hidden = false;
