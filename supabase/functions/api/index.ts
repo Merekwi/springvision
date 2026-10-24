@@ -227,8 +227,10 @@ Deno.serve(async (request) => {
           participant_list_published: season.participant_list_published, draw_published: season.draw_published,
           jury_voting_open: season.jury_voting_open && Boolean(juryRole.data), jury_results_published: season.jury_results_published,
           televote_open: season.televote_open, televote_results_published: season.televote_results_published,
-          overall_results_published: season.overall_results_published, twitch_url: season.twitch_url,
-          recording_storage_path: season.recording_storage_path,
+          overall_results_published: season.overall_results_published,
+          twitch_published: Boolean(season.twitch_published),
+          recording_url: null,
+          twitch_url: season.twitch_published ? season.twitch_url : null,
         };
         const totals = async (table: "jury_votes" | "televote_points") => {
           if (table === "jury_votes") {
@@ -263,6 +265,10 @@ Deno.serve(async (request) => {
         const reservedCountryCodes = [...new Set((reservedResult.data || []).map(row => row.country_code))];
         const countriesResult = await db.from("countries").select("code,name,flag_path").eq("enabled", true).order("name");
         if (countriesResult.error) throw new Error(countriesResult.error.message);
+        if (season.recording_published && season.recording_storage_path) {
+          const recording = await db.storage.from(BUCKET).createSignedUrl(season.recording_storage_path, 3600);
+          publicSeason.recording_url = recording.data?.signedUrl || null;
+        }
         const submissionsWithUrls = await Promise.all(submissions.map(async (row) => {
           const path = typeof row.recap_storage_path === "string" ? row.recap_storage_path : "";
           if (!path) return { ...row, recap_url: null };
@@ -406,7 +412,7 @@ Deno.serve(async (request) => {
         requireAdmin();
         const seasonId = String(body.seasonId || "");
         if (!seasonId) throw new Error("Не указан сезон.");
-        const allowed = ["title","logo_url","description","status","registration_opens_at","registration_closes_at","jury_deadline","contest_at","televote_minutes","participant_list_published","draw_published","jury_voting_open","jury_results_published","televote_open","televote_results_published","overall_results_published","twitch_url","recording_storage_path","combined_recap_storage_path"];
+        const allowed = ["title","logo_url","description","status","registration_opens_at","registration_closes_at","jury_deadline","contest_at","televote_minutes","participant_list_published","draw_published","jury_voting_open","jury_results_published","televote_open","televote_results_published","overall_results_published","twitch_url","twitch_published","recording_published","recording_storage_path","combined_recap_storage_path"];
         const patch: Record<string, unknown> = {};
         for (const key of allowed) if (Object.prototype.hasOwnProperty.call(body, key)) patch[key] = body[key];
         if (!Object.keys(patch).length) throw new Error("Нет параметров для обновления.");
