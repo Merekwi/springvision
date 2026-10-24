@@ -2,7 +2,7 @@
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const config = window.SPRINGVISION_CONFIG || { demoMode: true };
+  const config = window.SPRINGVISION_CONFIG || { demoMode: false };
   let currentSeason = null;
   let currentProfile = null;
   let currentIsAdmin = false;
@@ -239,7 +239,7 @@
     toast(`ZIP готов: ${files.length} рекапов`);
   };
   const openAdminSection = async (section) => {
-    if (!window.SpringVisionAPI?.configured()) { toast('Админ-панель заработает после подключения Supabase.'); return; }
+    if (!window.SpringVisionAPI?.configured()) { toast('Система ещё не подключена к базе данных.'); return; }
     if (!currentIsAdmin) { toast('Нет доступа к админ-панели.'); return; }
     try {
       if (section === 'applications') {
@@ -345,8 +345,8 @@
     if (file.size > 50 * 1024 * 1024) { message.textContent = 'Файл больше 50 МБ.'; return; }
     if (!file.type.startsWith('video/')) { message.textContent = 'Выбери видеофайл.'; return; }
     if (!window.SpringVisionAPI?.configured()) {
-      message.textContent = 'Проверка пройдена. Это демонстрационный режим: заявка и файл не отправлены.';
-      toast('Демо: данные не отправлены');
+      message.textContent = 'Система временно недоступна: сервер конкурса ещё не настроен. Заявка не отправлена.';
+      toast('Заявка не отправлена');
       return;
     }
     if (!currentSeason?.id || currentSeason.status !== 'registration') {
@@ -369,7 +369,7 @@
       message.textContent = error instanceof Error ? error.message : 'Не удалось отправить заявку.';
     } finally {
       submitButton.disabled = false;
-      submitButton.textContent = 'Проверить заявку →';
+      submitButton.textContent = 'Отправить заявку →';
     }
   });
 
@@ -547,7 +547,12 @@
 
   async function loadAppState() {
     if (!window.SpringVisionAPI?.configured()) {
-      $('#seasonStatus').textContent = 'Демонстрационный режим';
+      $('#seasonStatus').textContent = 'Сервер не подключён';
+      $('#seasonCardName').textContent = 'Сезон загружается после подключения сервера';
+      $('#seasonProgressLabel').textContent = 'Ожидание подключения';
+      $('#applyButton').disabled = true;
+      $('#voting').hidden = true;
+      renderRecaps([]);
       return;
     }
     try {
@@ -567,6 +572,9 @@
       currentSeason = state.season;
       reservedCountryCodes = new Set(state.reservedCountryCodes || []);
       $('#seasonStatus').textContent = statusLabels[currentSeason.status] || currentSeason.status;
+      const progress = ({draft:5,registration:20,moderation:35,drawn:50,jury_voting:65,televoting:80,finished:100,archived:100})[currentSeason.status] || 0;
+      $('#seasonProgressLabel').textContent = statusLabels[currentSeason.status] || currentSeason.status;
+      $('#seasonProgressBar').style.width = `${progress}%`;
       $('#seasonTitle').textContent = currentSeason.title;
       $('#seasonCardName').textContent = `SpringVision ${String(currentSeason.season_number).padStart(2,'0')}`;
       $('#seasonDescription').textContent = currentSeason.description || 'Участвуй в сезоне SpringVision: заявка, рекапы, жюри и результаты.';
@@ -575,7 +583,7 @@
       renderCountryOptions(countrySearch.value);
       renderRecaps(state.submissions || []);
       renderVoting(state);
-      if (state.isAdmin) $('#admin .status-pill').textContent = 'Администратор';
+      if (state.isAdmin) $('#admin').hidden = false;
     } catch (error) {
       $('#seasonStatus').textContent = 'Нет соединения с сервером';
       toast(error instanceof Error ? error.message : 'Не удалось загрузить SpringVision.');
@@ -586,6 +594,6 @@
     $('#seasonStatus').textContent = 'Подключаемся…';
     loadAppState();
   } else {
-    $('#seasonStatus').textContent = 'Демонстрационный режим';
+    $('#seasonStatus').textContent = 'Сервер не подключён';
   }
 })();
