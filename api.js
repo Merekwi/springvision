@@ -7,7 +7,7 @@
     telegram.expand();
   }
   const getInitData = () => telegram && typeof telegram.initData === 'string' ? telegram.initData : '';
-  const configured = () => config.demoMode === false && Boolean(config.supabaseUrl && config.supabaseAnonKey);
+  const configured = () => Boolean(config.supabaseUrl && config.supabaseAnonKey);
   async function request(action, payload = {}) {
     if (!configured()) throw new Error('Сервер конкурса не настроен: требуется подключить Supabase.');
     const initData = getInitData();
@@ -26,7 +26,7 @@
     return result;
   }
   async function requestForm(action, payload, fileField, file) {
-    if (!configured()) throw new Error('Supabase ещё не подключён. Открыт демонстрационный режим.');
+    if (!configured()) throw new Error('Сервер конкурса не настроен: требуется подключить Supabase.');
     const initData = getInitData();
     if (!initData) throw new Error('Откройте SpringVision внутри Telegram, чтобы подтвердить аккаунт.');
     const form = new FormData();
