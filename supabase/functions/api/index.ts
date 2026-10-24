@@ -151,7 +151,7 @@ Deno.serve(async (request) => {
         const seasonResult = await db.from("seasons").select("*").not("status", "eq", "archived").order("season_number", { ascending: false }).limit(1).maybeSingle();
         if (seasonResult.error) throw new Error(seasonResult.error.message);
         const season = seasonResult.data;
-        if (!season) return json({ profile, isAdmin, season: null, submissions: [], countries: [], reservedCountryCodes: [], juryResults: null, televoteResults: null, overallResults: null });
+        if (!season) return json({ profile, isAdmin, season: null, submissions: [], countries: [], reservedCountryCodes: [], ownSubmissionId: null, juryResults: null, televoteResults: null, overallResults: null });
         const juryRole = await db.from("season_jury").select("user_id").eq("season_id", season.id).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
         const canSeeParticipants = isAdmin || season.participant_list_published || Boolean(juryRole.data);
         let submissions: Record<string, unknown>[] = [];
@@ -162,6 +162,9 @@ Deno.serve(async (request) => {
           if (result.error) throw new Error(result.error.message);
           submissions = result.data || [];
         }
+        const ownSubmissionResult = await db.from("submissions").select("id").eq("season_id",season.id).eq("user_id",profile.id).eq("status","approved").maybeSingle();
+        if (ownSubmissionResult.error) throw new Error(ownSubmissionResult.error.message);
+        const ownSubmissionId = ownSubmissionResult.data?.id || null;
         const publicSeason = {
           id: season.id, season_number: season.season_number, title: season.title, logo_url: season.logo_url,
           description: season.description, status: season.status, registration_opens_at: season.registration_opens_at,
@@ -211,7 +214,7 @@ Deno.serve(async (request) => {
           const signed = await db.storage.from(BUCKET).createSignedUrl(path, 3600);
           return { ...row, recap_url: signed.data?.signedUrl || null };
         }));
-        return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
+        return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, ownSubmissionId, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
       }
 
       case "submit_application": {
