@@ -134,3 +134,11 @@
 .vote-row { gap: 10px; }
 .vote-row select { min-width: 0; flex: 1; }
 @media (max-width: 560px) { .vote-row { flex-wrap: wrap; } .vote-row select { flex-basis: 100%; width: 100%; } .vote-performer-preview { margin-left: auto; } }
+
+/* Three-part voting row: points, country heart + artist portrait, choice */
+.vote-row { display: grid; grid-template-columns: 78px auto minmax(0, 1fr); }
+.vote-row select { grid-column: auto; }
+@media (max-width: 560px) {
+  .vote-row { display: grid; grid-template-columns: 78px auto; }
+  .vote-row select { grid-column: 1 / -1; }
+}
