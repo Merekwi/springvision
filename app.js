@@ -676,13 +676,13 @@
       heading.textContent = title;
       const intro = document.createElement('p');
       intro.textContent = isJury
-        ? 'Распредели 12, 10 и 8–1 баллов между десятью разными странами. За собственную заявку голосовать нельзя.'
+        ? 'Распредели 12, 10 и 8–1 баллов между десятью разными странами. Своей стране нельзя поставить 12 баллов; остальные оценки распределяй по общим правилам.'
         : 'Распредели 12, 10 и 8–1 баллов между десятью разными странами. Один голос на аккаунт.';
       panel.append(heading,intro);
-      if (submissions.length < 10 || (isJury && submissions.length < 11)) {
+      if (submissions.length < 10) {
         const notice = document.createElement('p');
         notice.className = 'vote-notice';
-        notice.textContent = isJury ? 'Для голосования жюри нужны минимум 11 утверждённых участников, чтобы каждый мог не голосовать за себя.' : 'Для телеголосования нужны минимум 10 утверждённых участников.';
+        notice.textContent = 'Для голосования нужны минимум 10 утверждённых участников.';
         panel.append(notice);
         content.append(panel);
         return;
@@ -717,7 +717,7 @@
           const option = document.createElement('option');
           option.value = item.id;
           option.textContent = `${countryName(item.country_code)} — ${item.artist} / ${item.song_title}`;
-          if (isJury && !allowOwn && item.id === state.ownSubmissionId) option.disabled = true;
+          if (isJury && Number(select.dataset.points) === 12 && item.id === state.ownSubmissionId) option.disabled = true;
           select.append(option);
         });
         const updatePreview = () => {
@@ -748,7 +748,7 @@
         selects.forEach(select => [...select.options].forEach(option => {
           if (!option.value) return;
           const selectedElsewhere = selected.has(option.value) && select.value !== option.value;
-          option.disabled = selectedElsewhere || (isJury && !allowOwn && option.value===state.ownSubmissionId);
+          option.disabled = selectedElsewhere || (isJury && Number(select.dataset.points) === 12 && option.value===state.ownSubmissionId);
         }));
       };
       selects.forEach(select => select.addEventListener('change',refreshOptions));
