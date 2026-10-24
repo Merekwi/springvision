@@ -1,0 +1,59 @@
+name: Download heart-shaped country flags
+
+on:
+  push:
+    branches:
+      - feature/heart-country-flags
+    paths:
+      - .github/workflows/download-heart-flags.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  download-flags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/heart-country-flags
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download and install SVG flag assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 2 \
+            https://github.com/open-assets-hub/country-flag-collection/archive/refs/heads/main.zip \
+            -o /tmp/heart-flags.zip
+          mkdir -p /tmp/heart-flags assets/flags/heart
+          unzip -q /tmp/heart-flags.zip -d /tmp/heart-flags
+          source_dir="$(find /tmp/heart-flags -type d -path '*/heart/svg' -print -quit)"
+          test -n "$source_dir"
+          cp "$source_dir"/*.svg assets/flags/heart/
+          cp "$(dirname "$(dirname "$source_dir")")/LICENSE" assets/flags/heart/LICENSE
+          cat > assets/flags/heart/README.md <<'EOF'
+          # SpringVision heart-shaped country flags
+
+          Copied from [open-assets-hub/country-flag-collection](https://github.com/open-assets-hub/country-flag-collection), directory `heart/svg`.
+
+          - 271 SVG files with transparent backgrounds and heart-shaped silhouettes.
+          - Upstream license: MIT; see `LICENSE`.
+          - Upstream notes that flag artwork is sourced from lipis/flag-icons, also MIT licensed.
+
+          File names use ISO-style country/territory codes, e.g. `ru.svg` for Russia and `fi.svg` for Finland.
+          EOF
+      - name: Commit downloaded assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/flags/heart
+          if git diff --cached --quiet; then
+            echo "Heart flags are already up to date."
+            exit 0
+          fi
+          git commit -m "Download heart-shaped country flag assets"
+          git push origin HEAD:feature/heart-country-flags
