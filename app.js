@@ -334,6 +334,56 @@
           empty.textContent = 'Сезонов пока нет. Сначала создай сезон в разделе «Сезоны».';
           $('#adminApplicationsList').append(empty);
         }
+      } else if (section === 'voting-status') {
+        showAdminDialog('Статус голосования', `<div class="admin-form-row"><label>Сезон<select id="voteStatusSeason"></select></label><button type="button" class="button button-small" id="refreshVoteStatus">Обновить</button></div><p id="voteStatusSummary" class="admin-message" role="status">Выбери сезон.</p><div id="voteStatusTelevote" class="admin-submission"></div><h3>Голосование жюри по странам</h3><div id="voteStatusJury" class="admin-applications-list"></div>`);
+        const seasonSelect = $('#voteStatusSeason');
+        const seasons = await fillSeasonSelect(seasonSelect);
+        const renderVoteStatus = async () => {
+          const seasonId = await selectedSeason('#voteStatusSeason');
+          const out = $('#voteStatusSummary');
+          const juryList = $('#voteStatusJury');
+          const televote = $('#voteStatusTelevote');
+          out.textContent = 'Загружаем статус голосования…';
+          juryList.replaceChildren();
+          televote.replaceChildren();
+          const result = await window.SpringVisionAPI.request('admin_vote_status', { seasonId });
+          out.textContent = `Жюри проголосовало: ${result.juryVoted} из ${result.juryTotal} стран.`;
+          const tvTitle = document.createElement('strong');
+          tvTitle.textContent = `Телеголосование: ${result.televoteCount} голосов`;
+          const tvNote = document.createElement('p');
+          tvNote.textContent = 'Телеголоса анонимны и доступны зрителям на равных условиях, поэтому здесь отображается только общее количество принятых голосов.';
+          televote.append(tvTitle, tvNote);
+          if (!result.juryCountries?.length) {
+            const empty = document.createElement('p'); empty.className = 'admin-empty'; empty.textContent = 'В этом сезоне пока нет назначенного жюри.';
+            juryList.append(empty);
+          } else {
+            result.juryCountries.forEach(country => {
+              const card = document.createElement('article'); card.className = 'admin-submission';
+              const info = document.createElement('div'); info.className = 'admin-submission-main';
+              const heading = document.createElement('strong');
+              heading.textContent = country.country_name;
+              info.append(heading);
+              if (country.voted_at) {
+                const time = document.createElement('small');
+                time.textContent = 'Голос принят: ' + new Date(country.voted_at).toLocaleString('ru-RU');
+                info.append(time);
+              }
+              const status = document.createElement('span'); status.className = 'admin-submission-status';
+              status.textContent = country.voted ? 'Проголосовала' : 'Ожидается';
+              status.dataset.status = country.voted ? 'approved' : 'pending';
+              card.append(info, status);
+              juryList.append(card);
+            });
+          }
+        };
+        if (seasons.length) {
+          seasonSelect.value = seasons[0].id;
+          await renderVoteStatus();
+        } else {
+          $('#voteStatusSummary').textContent = 'Сезонов пока нет.';
+        }
+        $('#refreshVoteStatus').addEventListener('click', () => renderVoteStatus().catch(adminError));
+        seasonSelect.addEventListener('change', () => renderVoteStatus().catch(adminError));
       } else if (section === 'seasons') {
         showAdminDialog('Управление сезонами',`<form id="createSeasonForm" class="admin-form"><h3>Создать сезон</h3><div class="admin-form-grid"><label>Номер сезона<input id="newSeasonNumber" type="number" min="1" required></label><label>Название<input id="newSeasonTitle" maxlength="160" required></label></div><label>Описание<textarea id="newSeasonDescription" rows="2"></textarea></label><label>Ссылка на изображение (необязательно)<input id="newSeasonLogo" type="url" placeholder="https://…"></label><label>Или загрузить изображение сезона<input id="newSeasonImage" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG или WebP, до 10 МБ.</small></label><div class="admin-form-grid"><label>Начало регистрации<input id="newRegOpen" type="datetime-local"></label><label>Дедлайн регистрации<input id="newRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="newJuryDeadline" type="datetime-local"></label><label>Дедлайн телеголосования<input id="newTelevoteDeadline" type="datetime-local"></label><label>Дата конкурса<input id="newContestAt" type="datetime-local"></label></div><button class="button" type="submit">Создать сезон</button><p id="createSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><h3>Управление этапами и публикацией</h3><label>Сезон<select id="adminControlSeason"></select></label><form id="seasonControlsForm" class="admin-form"><label>Статус<select id="controlStatus"><option value="draft">Подготовка</option><option value="registration">Регистрация</option><option value="moderation">Модерация</option><option value="drawn">Жеребьёвка проведена</option><option value="jury_voting">Голосование жюри</option><option value="televoting">Телеголосование</option><option value="finished">Завершён</option><option value="archived">Архив</option></select></label><div class="admin-form-grid"><label>Начало регистрации<input id="controlRegOpen" type="datetime-local"></label><label>Дедлайн регистрации<input id="controlRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="controlJuryDeadline" type="datetime-local"></label><label>Дедлайн телеголосования<input id="controlTelevoteDeadline" type="datetime-local"></label><label>Дата конкурса<input id="controlContestAt" type="datetime-local"></label></div><div class="admin-checks"><label><input type="checkbox" id="controlParticipants"> Опубликовать участников</label><label><input type="checkbox" id="controlDraw"> Опубликовать жеребьёвку</label><label><input type="checkbox" id="controlJuryOpen"> Открыть голосование жюри</label><label><input type="checkbox" id="controlJuryResults"> Показать результаты жюри</label><label><input type="checkbox" id="controlTelevoteOpen"> Открыть телеголосование</label><label><input type="checkbox" id="controlTelevoteResults"> Показать результаты телеголосования</label><label><input type="checkbox" id="controlOverallResults"> Показать общий результат</label></div><label>Ссылка на Twitch<input type="url" id="controlTwitch" placeholder="https://www.twitch.tv/…"></label><div class="admin-checks"><label><input type="checkbox" id="controlTwitchPublished"> Показывать трансляцию на сайте</label><label><input type="checkbox" id="controlRecordingPublished"> Опубликовать запись финала</label></div><div class="admin-inline-actions"><button type="submit" class="button button-small">Сохранить настройки</button><button type="button" id="adminDrawButton" class="button button-ghost button-small">Провести жеребьёвку</button><button type="button" id="adminCloseJuryButton" class="button button-ghost button-small">Завершить жюривойт</button></div><p id="seasonControlsMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><div class="admin-form"><h3>Изображение сезона</h3><label>Новое изображение (PNG, JPG или WebP, до 10 МБ)<input id="replaceSeasonImage" type="file" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="uploadSeasonImageButton" class="button button-ghost button-small">Загрузить новое изображение</button><p id="seasonImageMessage" class="admin-message" role="status"></p></div><hr class="admin-divider"><form id="deleteSeasonForm" class="admin-form"><h3>Удаление сезона</h3><p>Удалит сезон, заявки, голоса и загруженные файлы. Действие необратимо.</p><label>Для подтверждения введи точное название выбранного сезона<input id="deleteSeasonConfirm" autocomplete="off" placeholder="Название сезона" required></label><button type="submit" class="button button-ghost button-small">Удалить сезон навсегда</button><p id="deleteSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><form id="recordingForm" class="admin-form"><h3>Запись финала</h3><label>Видео (до 50 МБ)<input id="recordingFile" type="file" accept="video/mp4,video/webm,video/quicktime" required></label><button class="button button-small" type="submit">Загрузить запись</button><p id="recordingMessage" class="admin-message" role="status"></p></form>`);
         const seasons = await fillSeasonSelect($('#adminControlSeason'));
