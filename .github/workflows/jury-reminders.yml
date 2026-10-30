@@ -33,16 +33,43 @@ jobs:
             {
               echo "### SpringVision reminders were skipped"
               echo
-              echo "The GitHub Actions secret SPRINGVISION_CRON_SECRET is missing."
+              echo "GitHub Actions secret SPRINGVISION_CRON_SECRET is missing."
               echo "No reminder or deadline-processing request was sent to Supabase."
-              echo "Add this secret with the same value configured as SPRINGVISION_CRON_SECRET in the Supabase Edge Function environment."
+              echo "Configure this secret with the same value as SPRINGVISION_CRON_SECRET in the Supabase Edge Function environment."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          curl --fail-with-body --silent --show-error \
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          if ! http_status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
             -X POST "$SUPABASE_URL/functions/v1/api" \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: $SPRINGVISION_CRON_SECRET" \
-            --data '{"action":"cron_jury_reminders"}'
+            --data '{"action":"cron_jury_reminders"}')"; then
+            echo "::error::Could not reach the SpringVision Supabase Edge Function."
+            cat "$response_file"
+            exit 1
+          fi
+
+          if [[ "$http_status" == "401" ]]; then
+            echo "::warning::Supabase rejected the cron secret. Jury reminders and automatic deadline processing were not run."
+            {
+              echo "### SpringVision reminders were not run"
+              echo
+              echo "Supabase returned HTTP 401 (Unauthorized cron request)."
+              echo "The GitHub Actions secret and the Supabase Edge Function secret SPRINGVISION_CRON_SECRET must contain exactly the same value."
+            } >> "$GITHUB_STEP_SUMMARY"
+            cat "$response_file"
+            exit 0
+          fi
+
+          if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::SpringVision cron request failed with HTTP $http_status."
+            cat "$response_file"
+            exit 1
+          fi
+
+          cat "$response_file"
