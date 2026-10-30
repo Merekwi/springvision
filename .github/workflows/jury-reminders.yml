@@ -33,9 +33,9 @@ jobs:
             {
               echo "### SpringVision reminders were skipped"
               echo
-              echo "The GitHub Actions secret `SPRINGVISION_CRON_SECRET` is missing."
+              echo "The GitHub Actions secret SPRINGVISION_CRON_SECRET is missing."
               echo "No reminder or deadline-processing request was sent to Supabase."
-              echo "Add this secret with the same value configured as `SPRINGVISION_CRON_SECRET` in the Supabase Edge Function environment."
+              echo "Add this secret with the same value configured as SPRINGVISION_CRON_SECRET in the Supabase Edge Function environment."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
