@@ -12,7 +12,7 @@ jobs:
   reminders:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger reminder and deadline processor
+      - name: Check cron configuration and trigger reminders
         env:
           SUPABASE_URL: https://dgdjddkaixjlscyqkpwz.supabase.co
           SUPABASE_ANON_KEY: sb_publishable_8e6xqrd2MvKZ4hhTOhg09A_k4QxgSzN
@@ -22,7 +22,19 @@ jobs:
           set -euo pipefail
           test -n "$SUPABASE_URL"
           test -n "$SUPABASE_ANON_KEY"
-          test -n "$SPRINGVISION_CRON_SECRET"
+
+          if [[ -z "${SPRINGVISION_CRON_SECRET:-}" ]]; then
+            echo "::warning::SPRINGVISION_CRON_SECRET is not configured in GitHub Actions. Jury reminders and automatic deadline processing were skipped."
+            {
+              echo "### SpringVision reminders were skipped"
+              echo
+              echo "The GitHub Actions secret `SPRINGVISION_CRON_SECRET` is missing."
+              echo "No reminder or deadline-processing request was sent to Supabase."
+              echo "Add this secret with the same value configured as `SPRINGVISION_CRON_SECRET` in the Supabase Edge Function environment."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/functions/v1/api" \
             -H "apikey: $SUPABASE_ANON_KEY" \
