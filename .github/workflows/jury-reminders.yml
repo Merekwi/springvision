@@ -1,6 +1,11 @@
 name: SpringVision jury reminders
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/jury-reminders.yml
   schedule:
     - cron: "0 */2 * * *"
   workflow_dispatch:
