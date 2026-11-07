@@ -440,6 +440,7 @@ Deno.serve(async (request) => {
         // Manual close transition: privately deliver the final televote tally to every admin.
         let televoteAdminNotification: { sent: number; failed: number } | null = null;
         if (wasTelevoteOpen && patch.televote_open === false) {
+          try {
           const [ballotsResult, submissionsResult, adminsResult] = await Promise.all([
             db.from("televote_ballots").select("id").eq("season_id", seasonId),
             db.from("submissions").select("id,country_code,artist,song_title,countries(name)").eq("season_id", seasonId).eq("status", "approved"),
@@ -492,6 +493,10 @@ Deno.serve(async (request) => {
             }
           }
           televoteAdminNotification = { sent, failed };
+          } catch (notifyError) {
+            console.error("Televote closed, but admin result notification failed:", notifyError);
+            televoteAdminNotification = { sent: 0, failed: 1 };
+          }
         }
         if (patch.status === "finished" || patch.status === "archived") {
           await db.from("season_jury").update({revoked_at:new Date().toISOString()}).eq("season_id",seasonId).is("revoked_at",null);
