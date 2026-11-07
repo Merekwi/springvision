@@ -418,6 +418,13 @@
             $('#controlTelevoteOpen').checked = false;
           }
         });
+        // Keep the phase and voting switches synchronized in both directions.
+        $('#controlTelevoteOpen').addEventListener('change', () => {
+          if ($('#controlTelevoteOpen').checked) {
+            $('#controlStatus').value = 'televoting';
+            $('#controlJuryOpen').checked = false;
+          }
+        });
         $('#controlStatus').addEventListener('change', () => {
           if ($('#controlStatus').value === 'jury_voting') {
             $('#controlJuryOpen').checked = true;
