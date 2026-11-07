@@ -208,7 +208,8 @@ Deno.serve(async (request) => {
         const season = seasonResult.data;
         if (!season) return json({ profile, isAdmin, season: null, submissions: [], countries: [], reservedCountryCodes: [], ownSubmissionId: null, juryResults: null, televoteResults: null, overallResults: null });
         const juryRole = await db.from("season_jury").select("user_id").eq("season_id", season.id).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
-        const canSeeParticipants = isAdmin || season.participant_list_published || Boolean(juryRole.data);
+        // An open televote must always expose the approved ballot options to voters.
+        const canSeeParticipants = isAdmin || season.participant_list_published || Boolean(juryRole.data) || (season.status === "televoting" && season.televote_open);
         let submissions: Record<string, unknown>[] = [];
         if (canSeeParticipants) {
           const result = await db.from("submissions")
@@ -417,6 +418,16 @@ Deno.serve(async (request) => {
         const allowed = ["title","logo_url","description","status","registration_opens_at","registration_closes_at","jury_deadline","contest_at","televote_minutes","participant_list_published","draw_published","jury_voting_open","jury_results_published","televote_open","televote_results_published","overall_results_published","twitch_url","twitch_published","recording_published","recording_storage_path","combined_recap_storage_path"];
         const patch: Record<string, unknown> = {};
         for (const key of allowed) if (Object.prototype.hasOwnProperty.call(body, key)) patch[key] = body[key];
+        // A phase cannot advertise televoting while the season remains in jury voting.
+        if (patch.televote_open === true) {
+          patch.status = "televoting";
+          patch.jury_voting_open = false;
+        } else if (patch.jury_voting_open === true) {
+          patch.status = "jury_voting";
+          patch.televote_open = false;
+        } else if (patch.status === "televoting") {
+          patch.jury_voting_open = false;
+        }
         if (!Object.keys(patch).length) throw new Error("Нет параметров для обновления.");
         const result = await db.from("seasons").update(patch).eq("id", seasonId).select("*").single();
         if (result.error) throw new Error("Не удалось обновить сезон: " + result.error.message);
