@@ -373,7 +373,7 @@ Deno.serve(async (request) => {
         }).select("*").single();
         if (result.error) throw new Error("Не удалось создать сезон: " + result.error.message);
         await writeAudit("season_created", "season", result.data.id, { season_number: seasonNumber });
-        return json({ season: result.data });
+        return json({ season: result.data, televoteAdminNotification });
       }
 
       case "admin_list_submissions": {
@@ -431,8 +431,68 @@ Deno.serve(async (request) => {
           patch.jury_voting_open = false;
         }
         if (!Object.keys(patch).length) throw new Error("Нет параметров для обновления.");
+        const previousSeasonResult = await db.from("seasons").select("id,title,televote_open").eq("id", seasonId).single();
+        if (previousSeasonResult.error || !previousSeasonResult.data) throw new Error("Не удалось прочитать текущие настройки сезона.");
+        const wasTelevoteOpen = previousSeasonResult.data.televote_open === true;
         const result = await db.from("seasons").update(patch).eq("id", seasonId).select("*").single();
         if (result.error) throw new Error("Не удалось обновить сезон: " + result.error.message);
+
+        // Manual close transition: privately deliver the final televote tally to every admin.
+        let televoteAdminNotification: { sent: number; failed: number } | null = null;
+        if (wasTelevoteOpen && patch.televote_open === false) {
+          const [ballotsResult, submissionsResult, adminsResult] = await Promise.all([
+            db.from("televote_ballots").select("id").eq("season_id", seasonId),
+            db.from("submissions").select("id,country_code,artist,song_title,countries(name)").eq("season_id", seasonId).eq("status", "approved"),
+            db.from("profiles").select("telegram_id,display_name").in("role", ["admin", "super_admin"]).not("telegram_id", "is", null),
+          ]);
+          if (ballotsResult.error) throw new Error("Телеголосование закрыто, но не удалось получить число бюллетеней: " + ballotsResult.error.message);
+          if (submissionsResult.error) throw new Error("Телеголосование закрыто, но не удалось получить список участников: " + submissionsResult.error.message);
+          if (adminsResult.error) throw new Error("Телеголосование закрыто, но не удалось получить список администраторов: " + adminsResult.error.message);
+
+          const ballotIds = (ballotsResult.data || []).map((row: any) => row.id);
+          let pointRows: any[] = [];
+          if (ballotIds.length) {
+            const pointsResult = await db.from("televote_points").select("target_submission_id,points").in("ballot_id", ballotIds);
+            if (pointsResult.error) throw new Error("Телеголосование закрыто, но не удалось рассчитать результаты: " + pointsResult.error.message);
+            pointRows = pointsResult.data || [];
+          }
+          const totals = new Map<string, number>();
+          for (const row of pointRows) {
+            const key = String(row.target_submission_id);
+            totals.set(key, (totals.get(key) || 0) + Number(row.points || 0));
+          }
+          const ranking = (submissionsResult.data || []).map((submission: any) => ({
+            ...submission,
+            total: totals.get(String(submission.id)) || 0,
+          })).sort((a: any, b: any) => b.total - a.total || String(a.country_code).localeCompare(String(b.country_code)));
+
+          const lines = [
+            "SpringVision — итоги телеголосования",
+            "Сезон: " + String(result.data.title || previousSeasonResult.data.title || "Без названия"),
+            "Получено голосов: " + ballotIds.length,
+            "",
+            ...ranking.map((row: any, index: number) => {
+              const country = Array.isArray(row.countries) ? row.countries[0] : row.countries;
+              const countryName = country?.name || row.country_code || "Страна";
+              return `${index + 1}. ${countryName} — ${row.total} баллов\n   ${row.artist || "Исполнитель"} — «${row.song_title || "Без названия"}»`;
+            }),
+            "",
+            "Это служебное сообщение для администраторов. Результаты не опубликованы на сайте автоматически.",
+          ];
+          const message = lines.join("\n");
+          const adminIds = [...new Set((adminsResult.data || []).map((row: any) => Number(row.telegram_id)).filter((id: number) => Number.isSafeInteger(id) && id > 0))];
+          let sent = 0, failed = 0;
+          for (const adminId of adminIds) {
+            try {
+              await sendTelegram(botToken, adminId, message.slice(0, 3900));
+              sent++;
+            } catch (error) {
+              failed++;
+              console.error("Failed to send televote results to admin", adminId, error);
+            }
+          }
+          televoteAdminNotification = { sent, failed };
+        }
         if (patch.status === "finished" || patch.status === "archived") {
           await db.from("season_jury").update({revoked_at:new Date().toISOString()}).eq("season_id",seasonId).is("revoked_at",null);
         }
