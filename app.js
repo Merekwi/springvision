@@ -411,6 +411,21 @@
           $('#controlRecordingPublished').checked = Boolean(selected.recording_published);
         };
         $('#adminControlSeason').addEventListener('change',fillControls);
+        // Opening jury voting is a phase change, not just a visual toggle.
+        $('#controlJuryOpen').addEventListener('change', () => {
+          if ($('#controlJuryOpen').checked) {
+            $('#controlStatus').value = 'jury_voting';
+            $('#controlTelevoteOpen').checked = false;
+          }
+        });
+        $('#controlStatus').addEventListener('change', () => {
+          if ($('#controlStatus').value === 'jury_voting') {
+            $('#controlJuryOpen').checked = true;
+            $('#controlTelevoteOpen').checked = false;
+          } else if ($('#controlStatus').value === 'televoting') {
+            $('#controlJuryOpen').checked = false;
+          }
+        });
         $('#uploadSeasonImageButton').addEventListener('click',async()=>{
           const out=$('#seasonImageMessage');
           try {
