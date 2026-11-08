@@ -725,13 +725,29 @@
         details.append(country);
       }
       card.append(flag,details);
-      if (!drawOnly && item.recap_url) {
-        const link = document.createElement('a');
-        link.href = item.recap_url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
+      if (!drawOnly && item.recap_storage_path) {
+        const link = document.createElement('button');
+        link.type = 'button';
         link.className = 'button button-small recap-play';
         link.textContent = 'Смотреть рекап ↗';
+        link.addEventListener('click', async () => {
+          const popup = window.open('about:blank', '_blank');
+          if (popup) popup.opener = null;
+          link.disabled = true;
+          try {
+            const fresh = await window.SpringVisionAPI.request('recap_download', {
+              seasonId: currentSeason.id, submissionId: item.id
+            });
+            if (!fresh.recap_url) throw new Error('Сервер не вернул ссылку на рекап.');
+            if (popup) popup.location.href = fresh.recap_url;
+            else window.location.href = fresh.recap_url;
+          } catch (error) {
+            popup?.close();
+            toast(error instanceof Error ? error.message : 'Не удалось открыть рекап.');
+          } finally {
+            link.disabled = false;
+          }
+        });
         card.append(link);
       }
       list.append(card);
