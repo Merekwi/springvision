@@ -223,8 +223,13 @@ Deno.serve(async (request) => {
         const ownSubmissionResult = await db.from("submissions").select("id").eq("season_id",season.id).eq("user_id",profile.id).eq("status","approved").maybeSingle();
         if (ownSubmissionResult.error) throw new Error(ownSubmissionResult.error.message);
         const ownSubmissionId = ownSubmissionResult.data?.id || null;
+        let publicLogoUrl: string | null = season.logo_url || null;
+        if (typeof publicLogoUrl === "string" && publicLogoUrl.startsWith("storage:")) {
+          const logo = await db.storage.from(BUCKET).createSignedUrl(publicLogoUrl.slice("storage:".length), 3600);
+          publicLogoUrl = logo.data?.signedUrl || null;
+        }
         const publicSeason = {
-          id: season.id, season_number: season.season_number, title: season.title, logo_url: season.logo_url,
+          id: season.id, season_number: season.season_number, title: season.title, logo_url: publicLogoUrl,
           description: season.description, status: season.status, registration_opens_at: season.registration_opens_at,
           registration_closes_at: season.registration_closes_at, jury_deadline: season.jury_deadline, contest_at: season.contest_at,
           participant_list_published: season.participant_list_published, draw_published: season.draw_published,
@@ -330,6 +335,52 @@ Deno.serve(async (request) => {
         return json({ seasons: result.data || [] });
       }
 
+      case "admin_vote_status": {
+        requireAdmin();
+        const seasonId = String(body.seasonId || "");
+        if (!seasonId) throw new Error("Не указан сезон.");
+        const [juryResult, votesResult, ballotsResult] = await Promise.all([
+          db.from("season_jury").select("user_id,submission_id").eq("season_id", seasonId).is("revoked_at", null),
+          db.from("jury_votes").select("juror_id,created_at,is_random_fallback").eq("season_id", seasonId),
+          db.from("televote_ballots").select("id").eq("season_id", seasonId),
+        ]);
+        if (juryResult.error) throw new Error("Не удалось получить список жюри: " + juryResult.error.message);
+        if (votesResult.error) throw new Error("Не удалось получить голоса жюри: " + votesResult.error.message);
+        if (ballotsResult.error) throw new Error("Не удалось получить число телеголосов: " + ballotsResult.error.message);
+        const submissionIds = [...new Set((juryResult.data || []).map((row: any) => row.submission_id).filter(Boolean))];
+        let submissionsById = new Map<string, any>();
+        if (submissionIds.length) {
+          const submissionsResult = await db.from("submissions").select("id,country_code,countries(name)").in("id", submissionIds);
+          if (submissionsResult.error) throw new Error("Не удалось получить страны жюри: " + submissionsResult.error.message);
+          submissionsById = new Map((submissionsResult.data || []).map((row: any) => [String(row.id), row]));
+        }
+        const votesByJuror = new Map<string, { manualAt: string | null; autoAssigned: boolean }>();
+        for (const vote of votesResult.data || []) {
+          const key = String(vote.juror_id);
+          const current = votesByJuror.get(key) || { manualAt: null, autoAssigned: false };
+          if (vote.is_random_fallback) current.autoAssigned = true;
+          else if (!current.manualAt || String(vote.created_at) > current.manualAt) current.manualAt = String(vote.created_at);
+          votesByJuror.set(key, current);
+        }
+        const juryCountries = (juryResult.data || []).map((row: any) => {
+          const submission = row.submission_id ? submissionsById.get(String(row.submission_id)) : null;
+          const country = Array.isArray(submission?.countries) ? submission.countries[0] : submission?.countries;
+          const vote = votesByJuror.get(String(row.user_id));
+          return {
+            country_name: country?.name || submission?.country_code?.toUpperCase() || "Участник",
+            voted: Boolean(vote?.manualAt),
+            autoAssigned: Boolean(vote?.autoAssigned),
+            voted_at: vote?.manualAt || null,
+          };
+        });
+        return json({
+          juryVoted: juryCountries.filter((row: any) => row.voted).length,
+          juryTotal: juryCountries.length,
+          juryCountries,
+          televoteCount: (ballotsResult.data || []).length,
+        });
+      }
+
       case "admin_set_role": {
         if (profile.role !== "super_admin") throw new Error("Назначать администраторов может только главный администратор.");
         const telegramId = Number(body.telegramId);
@@ -362,18 +413,23 @@ Deno.serve(async (request) => {
 
       case "admin_create_season": {
         requireAdmin();
-        const seasonNumber = Number(body.seasonNumber);
         const title = String(body.title || "").trim();
-        if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || !title) throw new Error("Укажите номер и название сезона.");
+        if (!title) throw new Error("Укажите название сезона.");
+        const latest = await db.from("seasons").select("season_number").order("season_number", { ascending: false }).limit(1).maybeSingle();
+        if (latest.error) throw new Error("Не удалось определить номер нового сезона: " + latest.error.message);
+        const seasonNumber = Number(latest.data?.season_number || 0) + 1;
         const result = await db.from("seasons").insert({
           season_number: seasonNumber, title, logo_url: body.logoUrl || null, description: body.description || null,
           registration_opens_at: body.registrationOpensAt || null, registration_closes_at: body.registrationClosesAt || null,
-          jury_deadline: body.juryDeadline || null, contest_at: body.contestAt || null,
-          televote_minutes: Number(body.televoteMinutes || 60), created_by: profile.id,
+          jury_deadline: body.juryDeadline || null, televote_deadline: body.televoteDeadline || null,
+          contest_at: body.contestAt || null, televote_minutes: Number(body.televoteMinutes || 60), created_by: profile.id,
         }).select("*").single();
-        if (result.error) throw new Error("Не удалось создать сезон: " + result.error.message);
+        if (result.error) {
+          if (result.error.code === "23505") throw new Error("Номер сезона уже занят. Обнови список сезонов и повтори создание.");
+          throw new Error("Не удалось создать сезон: " + result.error.message);
+        }
         await writeAudit("season_created", "season", result.data.id, { season_number: seasonNumber });
-        return json({ season: result.data, televoteAdminNotification });
+        return json({ season: result.data });
       }
 
       case "admin_list_submissions": {
@@ -417,7 +473,7 @@ Deno.serve(async (request) => {
         requireAdmin();
         const seasonId = String(body.seasonId || "");
         if (!seasonId) throw new Error("Не указан сезон.");
-        const allowed = ["title","logo_url","description","status","registration_opens_at","registration_closes_at","jury_deadline","contest_at","televote_minutes","participant_list_published","draw_published","jury_voting_open","jury_results_published","televote_open","televote_results_published","overall_results_published","twitch_url","twitch_published","recording_published","recording_storage_path","combined_recap_storage_path"];
+        const allowed = ["title","logo_url","description","status","registration_opens_at","registration_closes_at","jury_deadline","televote_deadline","contest_at","televote_minutes","participant_list_published","draw_published","jury_voting_open","jury_results_published","televote_open","televote_results_published","overall_results_published","twitch_url","twitch_published","recording_published","recording_storage_path","combined_recap_storage_path"];
         const patch: Record<string, unknown> = {};
         for (const key of allowed) if (Object.prototype.hasOwnProperty.call(body, key)) patch[key] = body[key];
         // A phase cannot advertise televoting while the season remains in jury voting.
@@ -505,6 +561,91 @@ Deno.serve(async (request) => {
         return json({ season: result.data });
       }
 
+      case "admin_close_jury": {
+        requireAdmin();
+        const seasonId = String(body.seasonId || "");
+        if (!seasonId) throw new Error("Не указан сезон.");
+        const season = await seasonById(seasonId);
+        if (!season.jury_voting_open) throw new Error("Голосование жюри уже закрыто.");
+        const [juryResult, submissionsResult, votesResult] = await Promise.all([
+          db.from("season_jury").select("user_id,submission_id").eq("season_id", seasonId).is("revoked_at", null),
+          db.from("submissions").select("id,user_id").eq("season_id", seasonId).eq("status", "approved"),
+          db.from("jury_votes").select("juror_id").eq("season_id", seasonId),
+        ]);
+        if (juryResult.error) throw new Error("Не удалось получить список жюри: " + juryResult.error.message);
+        if (submissionsResult.error) throw new Error("Не удалось получить участников: " + submissionsResult.error.message);
+        if (votesResult.error) throw new Error("Не удалось проверить голоса: " + votesResult.error.message);
+        const existingVoters = new Set((votesResult.data || []).map((row: any) => String(row.juror_id)));
+        const submissions = submissionsResult.data || [];
+        let randomBallots = 0;
+        let unableToAssign = 0;
+        for (const juror of juryResult.data || []) {
+          if (existingVoters.has(String(juror.user_id))) continue;
+          const ownId = juror.submission_id || submissions.find((row: any) => row.user_id === juror.user_id)?.id || null;
+          const eligible = submissions.filter((row: any) => row.id !== ownId);
+          for (let i = eligible.length - 1; i > 0; i--) {
+            const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+            [eligible[i], eligible[j]] = [eligible[j], eligible[i]];
+          }
+          if (eligible.length < POINTS.length) {
+            unableToAssign++;
+            continue;
+          }
+          const saved = await db.from("jury_votes").insert(POINTS.map((points, index) => ({
+            season_id: seasonId, juror_id: juror.user_id, target_submission_id: eligible[index].id,
+            points, is_random_fallback: true,
+          })));
+          if (saved.error) {
+            if (saved.error.code === "23505") continue;
+            throw new Error("Не удалось назначить автоматические оценки: " + saved.error.message);
+          }
+          randomBallots++;
+        }
+        const closed = await db.from("seasons").update({ jury_voting_open: false }).eq("id", seasonId).select("id").single();
+        if (closed.error) throw new Error("Не удалось закрыть голосование жюри: " + closed.error.message);
+        await writeAudit("jury_voting_manually_closed", "season", seasonId, { random_ballots: randomBallots, unable_to_assign: unableToAssign });
+        return json({ ok: true, randomBallots, unableToAssign });
+      }
+
+      case "admin_delete_season": {
+        requireAdmin();
+        const seasonId = String(body.seasonId || "");
+        const confirmTitle = String(body.confirmTitle || "").trim();
+        if (!seasonId || !confirmTitle) throw new Error("Не указан сезон или подтверждение.");
+        const seasonResult = await db.from("seasons")
+          .select("id,season_number,title,logo_url,recording_storage_path,combined_recap_storage_path")
+          .eq("id", seasonId).maybeSingle();
+        if (seasonResult.error || !seasonResult.data) throw new Error("Сезон не найден.");
+        const season = seasonResult.data;
+        if (confirmTitle !== season.title) throw new Error("Название сезона не совпадает. Удаление отменено.");
+        const submissionsResult = await db.from("submissions")
+          .select("recap_storage_path,performer_photo_storage_path").eq("season_id", seasonId);
+        if (submissionsResult.error) throw new Error("Не удалось подготовить файлы сезона к удалению: " + submissionsResult.error.message);
+        const paths = new Set<string>();
+        const addPath = (value: unknown) => { if (typeof value === "string" && value.trim()) paths.add(value.trim()); };
+        addPath(season.recording_storage_path);
+        addPath(season.combined_recap_storage_path);
+        if (typeof season.logo_url === "string" && season.logo_url.startsWith("storage:")) addPath(season.logo_url.slice("storage:".length));
+        for (const row of submissionsResult.data || []) {
+          addPath(row.recap_storage_path);
+          addPath(row.performer_photo_storage_path);
+        }
+        const removed = await db.from("seasons").delete().eq("id", seasonId).select("id").maybeSingle();
+        if (removed.error) throw new Error("Не удалось удалить сезон: " + removed.error.message);
+        if (!removed.data) throw new Error("Сезон уже был удалён.");
+        let storageWarning: string | null = null;
+        const filePaths = [...paths];
+        if (filePaths.length) {
+          const storageResult = await db.storage.from(BUCKET).remove(filePaths);
+          if (storageResult.error) {
+            storageWarning = storageResult.error.message;
+            console.error("Season removed, but storage cleanup failed:", seasonId, storageResult.error);
+          }
+        }
+        await writeAudit("season_deleted", "season", seasonId, { season_number: season.season_number, title: season.title, storage_files: filePaths.length });
+        return json({ ok: true, storageWarning });
+      }
+
       case "admin_draw": {
         requireAdmin();
         const seasonId = String(body.seasonId || "");
@@ -566,6 +707,32 @@ Deno.serve(async (request) => {
         }
         await writeAudit("televote_submitted","season",seasonId);
         return json({ ok: true });
+      }
+
+      case "admin_upload_season_image": {
+        requireAdmin();
+        if (!form) throw new Error("Прикрепите изображение сезона.");
+        const seasonId = String(body.seasonId || "");
+        if (!seasonId) throw new Error("Не указан сезон.");
+        const season = await seasonById(seasonId);
+        const file = form.get("file");
+        if (!(file instanceof File)) throw new Error("Файл изображения не найден.");
+        if (!file.size || file.size > 10 * 1024 * 1024) throw new Error("Изображение должно быть не пустым и не превышать 10 МБ.");
+        if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("Поддерживаются только PNG, JPG и WebP.");
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "season-image";
+        const path = `season-logos/${seasonId}/${crypto.randomUUID()}-${safeName}`;
+        const uploaded = await db.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+        if (uploaded.error) throw new Error("Не удалось загрузить изображение: " + uploaded.error.message);
+        const updated = await db.from("seasons").update({ logo_url: "storage:" + path }).eq("id", seasonId).select("id,logo_url").single();
+        if (updated.error) {
+          await db.storage.from(BUCKET).remove([path]);
+          throw new Error("Не удалось сохранить изображение сезона: " + updated.error.message);
+        }
+        const oldLogoPath = typeof season.logo_url === "string" && season.logo_url.startsWith("storage:")
+          ? season.logo_url.slice("storage:".length) : null;
+        if (oldLogoPath) await db.storage.from(BUCKET).remove([oldLogoPath]);
+        await writeAudit("season_image_uploaded", "season", seasonId);
+        return json({ ok: true, logo_url: updated.data.logo_url });
       }
 
       case "admin_upload_recording": {
