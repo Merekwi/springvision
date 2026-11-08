@@ -282,8 +282,8 @@ Deno.serve(async (request) => {
           const publicOrder = isAdmin || season.draw_published;
           const safeRow = { ...row, performance_order: publicOrder ? row.performance_order : null };
           if (!path) return { ...safeRow, recap_url: null };
-          const signed = await db.storage.from(BUCKET).createSignedUrl(path, 3600);
-          return { ...safeRow, recap_url: signed.data?.signedUrl || null };
+          // Signed URLs expire; obtain a fresh one only when the participant clicks the recap.
+          return { ...safeRow, recap_url: null };
         }));
         return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, ownSubmissionId, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
       }
@@ -415,9 +415,30 @@ Deno.serve(async (request) => {
         const recaps = await Promise.all((result.data || []).map(async (row) => {
           if (!row.recap_storage_path) return {...row,recap_url:null};
           const signed = await db.storage.from(BUCKET).createSignedUrl(row.recap_storage_path,3600);
+          if (signed.error) throw new Error("Не удалось создать ссылку для " + row.country_code + ": " + signed.error.message);
           return {...row,recap_url:signed.data?.signedUrl || null};
         }));
         return json({ recaps });
+      }
+
+      case "recap_download": {
+        const submissionId = String(body.submissionId || "");
+        const seasonId = String(body.seasonId || "");
+        if (!submissionId || !seasonId) throw new Error("Не указана заявка или сезон.");
+        const seasonResult = await db.from("seasons").select("id,status,participant_list_published,televote_open")
+          .eq("id",seasonId).maybeSingle();
+        if (seasonResult.error || !seasonResult.data) throw new Error("Сезон не найден.");
+        const juryRole = await db.from("season_jury").select("user_id").eq("season_id",seasonId)
+          .eq("user_id",profile.id).is("revoked_at",null).maybeSingle();
+        const canSeeParticipants = isAdmin || seasonResult.data.participant_list_published ||
+          Boolean(juryRole.data) || (seasonResult.data.status === "televoting" && seasonResult.data.televote_open);
+        if (!canSeeParticipants) throw new Error("Рекапы этого сезона пока не опубликованы.");
+        const submission = await db.from("submissions").select("recap_storage_path")
+          .eq("id",submissionId).eq("season_id",seasonId).eq("status","approved").maybeSingle();
+        if (submission.error || !submission.data?.recap_storage_path) throw new Error("Рекап не найден.");
+        const signed = await db.storage.from(BUCKET).createSignedUrl(submission.data.recap_storage_path,3600);
+        if (signed.error || !signed.data?.signedUrl) throw new Error("Не удалось создать свежую ссылку на рекап: " + (signed.error?.message || "пустой ответ Storage"));
+        return json({ recap_url: signed.data.signedUrl });
       }
 
       case "admin_create_season": {
