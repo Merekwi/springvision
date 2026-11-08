@@ -332,7 +332,16 @@ Deno.serve(async (request) => {
         requireAdmin();
         const result = await db.from("seasons").select("*").order("season_number", { ascending: false });
         if (result.error) throw new Error(result.error.message);
-        return json({ seasons: result.data || [] });
+        const seasons = await Promise.all((result.data || []).map(async (season: any) => {
+          let logoUrl: string | null = season.logo_url || null;
+          if (typeof logoUrl === "string" && logoUrl.startsWith("storage:")) {
+            const signed = await db.storage.from(BUCKET).createSignedUrl(logoUrl.slice("storage:".length), 3600);
+            logoUrl = signed.data?.signedUrl || null;
+            if (signed.error) console.error("Could not sign season cover URL:", season.id, signed.error);
+          }
+          return { ...season, logo_url: logoUrl };
+        }));
+        return json({ seasons });
       }
 
       case "admin_vote_status": {
