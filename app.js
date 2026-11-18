@@ -6,6 +6,8 @@
   let currentProfile = null;
   let currentIsAdmin = false;
   let reservedCountryCodes = new Set();
+  let stateLoading = false;
+  let lastStateLoadedAt = 0;
   const POINTS = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
   const countries = [
     ['🇦🇱','Албания'],['🇦🇩','Андорра'],['🇦🇲','Армения'],['🇦🇹','Австрия'],['🇦🇿','Азербайджан'],['🇧🇾','Беларусь'],['🇧🇪','Бельгия'],['🇧🇦','Босния и Герцеговина'],['🇧🇬','Болгария'],['🇭🇷','Хорватия'],['🇨🇾','Кипр'],['🇨🇿','Чехия'],['🇩🇰','Дания'],['🇪🇪','Эстония'],['🇫🇮','Финляндия'],['🇫🇷','Франция'],['🇬🇪','Грузия'],['🇩🇪','Германия'],['🇬🇷','Греция'],['🇭🇺','Венгрия'],['🇮🇸','Исландия'],['🇮🇪','Ирландия'],['🇮🇱','Израиль'],['🇮🇹','Италия'],['🇰🇿','Казахстан'],['🇽🇰','Косово'],['🇱🇻','Латвия'],['🇱🇹','Литва'],['🇱🇺','Люксембург'],['🇲🇹','Мальта'],['🇲🇩','Молдова'],['🇲🇨','Монако'],['🇲🇪','Черногория'],['🇲🇦','Марокко'],['🇳🇱','Нидерланды'],['🇲🇰','Северная Македония'],['🇳🇴','Норвегия'],['🇵🇱','Польша'],['🇵🇹','Португалия'],['🇷🇴','Румыния'],['🇷🇺','Россия'],['🇸🇲','Сан-Марино'],['🇷🇸','Сербия'],['🇸🇰','Словакия'],['🇸🇮','Словения'],['🇪🇸','Испания'],['🇸🇪','Швеция'],['🇨🇭','Швейцария'],['🇹🇷','Турция'],['🇺🇦','Украина'],['🇬🇧','Великобритания'],['🇺🇸','США'],['🇨🇦','Канада'],['🇦🇺','Австралия'],['🇳🇿','Новая Зеландия'],['🇯🇵','Япония'],['🇰🇷','Южная Корея'],['🇨🇳','Китай'],['🇮🇳','Индия'],['🇧🇷','Бразилия'],['🇦🇷','Аргентина'],['🇲🇽','Мексика'],['🇨🇱','Чили'],['🇿🇦','ЮАР'],['🇪🇬','Египет'],['🇹🇳','Тунис'],['🇩🇿','Алжир'],['🇲🇦','Марокко'],['🇹🇭','Таиланд'],['🇻🇳','Вьетнам'],['🇮🇩','Индонезия'],['🇵🇭','Филиппины'],['🇸🇬','Сингапур'],['🇲🇾','Малайзия'],['🇸🇦','Саудовская Аравия'],['🇦🇪','ОАЭ'],['🇶🇦','Катар'],['🇯🇴','Иордания'],['🇱🇧','Ливан'],['🇵🇰','Пакистан'],['🇧🇩','Бангладеш'],['🇳🇵','Непал'],['🇱🇰','Шри-Ланка'],['🇮🇷','Иран'],['🇮🇶','Ирак'],['🇦🇫','Афганистан'],['🇺🇿','Узбекистан'],['🇰🇬','Кыргызстан'],['🇹🇯','Таджикистан'],['🇹🇲','Туркменистан'],['🇲🇳','Монголия'],['🇰🇪','Кения'],['🇳🇬','Нигерия'],['🇬🇭','Гана'],['🇪🇹','Эфиопия'],['🇹🇿','Танзания'],['🇺🇬','Уганда'],['🇸🇳','Сенегал'],['🇨🇮','Кот-д’Ивуар'],['🇨🇲','Камерун'],['🇨🇩','ДР Конго'],['🇦🇴','Ангола'],['🇲🇿','Мозамбик'],['🇿🇼','Зимбабве'],['🇿🇲','Замбия'],['🇧🇼','Ботсвана'],['🇳🇦','Намибия'],['🇲🇬','Мадагаскар'],['🇲🇺','Маврикий'],['🇸🇨','Сейшелы'],['🇫🇯','Фиджи'],['🇵🇬','Папуа — Новая Гвинея'],['🇸🇧','Соломоновы Острова'],['🇼🇸','Самоа'],['🇹🇴','Тонга'],['🇻🇺','Вануату'],['🇵🇼','Палау'],['🇲🇭','Маршалловы Острова'],['🇰🇮','Кирибати'],['🇹🇻','Тувалу'],['🇳🇷','Науру'],['🇲🇻','Мальдивы'],['🇧🇹','Бутан'],['🇧🇳','Бруней'],['🇰🇭','Камбоджа'],['🇱🇦','Лаос'],['🇲🇲','Мьянма'],['🇹🇱','Восточный Тимор'],['🇧🇴','Боливия'],['🇵🇪','Перу'],['🇪🇨','Эквадор'],['🇨🇴','Колумбия'],['🇻🇪','Венесуэла'],['🇺🇾','Уругвай'],['🇵🇾','Парагвай'],['🇬🇾','Гайана'],['🇸🇷','Суринам'],['🇨🇷','Коста-Рика'],['🇵🇦','Панама'],['🇬🇹','Гватемала'],['🇧🇿','Белиз'],['🇭🇳','Гондурас'],['🇸🇻','Сальвадор'],['🇳🇮','Никарагуа'],['🇨🇺','Куба'],['🇯🇲','Ямайка'],['🇭🇹','Гаити'],['🇩🇴','Доминиканская Республика'],['🇧🇸','Багамы'],['🇧🇧','Барбадос'],['🇹🇹','Тринидад и Тобаго'],['🇬🇩','Гренада'],['🇱🇨','Сент-Люсия'],['🇻🇨','Сент-Винсент и Гренадины'],['🇦🇬','Антигуа и Барбуда'],['🇩🇲','Доминика'],['🇰🇳','Сент-Китс и Невис']
@@ -920,6 +922,26 @@
       flag.className = 'heart-flag recap-flag';
       flag.src = `assets/flags/heart/${item.country_code}.svg`;
       flag.alt = '';
+      const identity = document.createElement('div');
+      identity.className = 'recap-identity';
+      identity.append(flag);
+      if (item.performer_photo_url) {
+        const portrait = document.createElement('img');
+        portrait.className = 'recap-portrait';
+        portrait.src = item.performer_photo_url;
+        portrait.alt = `Фото представителя ${countryName}`;
+        portrait.loading = 'lazy';
+        portrait.onerror = () => {
+          portrait.hidden = true;
+          identity.classList.add('has-photo-error');
+        };
+        identity.append(portrait);
+      } else if (currentIsAdmin) {
+        const missing = document.createElement('span');
+        missing.className = 'recap-photo-missing';
+        missing.textContent = 'Фото не загружено';
+        identity.append(missing);
+      }
       const details = document.createElement('div');
       details.className = 'recap-item-details';
       const title = document.createElement('strong');
@@ -934,17 +956,8 @@
         country.textContent = countryName;
         details.append(country);
       }
-      if (!drawOnly && item.performer_photo_url) {
-        const portrait = document.createElement('img');
-        portrait.className = 'recap-portrait';
-        portrait.src = item.performer_photo_url;
-        portrait.alt = `Представитель: ${countryName}`;
-        portrait.loading = 'lazy';
-        portrait.onerror = () => { portrait.hidden = true; };
-        card.append(flag,portrait,details);
-      } else {
-        card.append(flag,details);
-      }
+      // Keep the representative portrait beside the country flag in every recap stage.
+      card.append(identity,details);
       if (!drawOnly && item.recap_storage_path) {
         const link = document.createElement('button');
         link.type = 'button';
@@ -999,6 +1012,60 @@
         content.append(panel);
         return;
       }
+
+      const gallery = document.createElement('section');
+      gallery.className = 'vote-participants';
+      const galleryHeading = document.createElement('div');
+      galleryHeading.className = 'vote-participants-heading';
+      const galleryTitle = document.createElement('strong');
+      galleryTitle.textContent = 'Представители стран';
+      const photoCount = submissions.filter(item => item.performer_photo_url).length;
+      const galleryCount = document.createElement('small');
+      galleryCount.textContent = `Фото загружено: ${photoCount} из ${submissions.length}`;
+      galleryHeading.append(galleryTitle,galleryCount);
+      const galleryGrid = document.createElement('div');
+      galleryGrid.className = 'vote-participants-grid';
+      submissions.forEach(item => {
+        const person = document.createElement('article');
+        person.className = 'vote-participant';
+        const identity = document.createElement('div');
+        identity.className = 'vote-participant-identity';
+        const flag = document.createElement('img');
+        flag.className = 'vote-participant-flag';
+        flag.src = `assets/flags/heart/${item.country_code}.svg`;
+        flag.alt = '';
+        const photoBox = document.createElement('span');
+        photoBox.className = 'vote-participant-photo-box';
+        const placeholder = document.createElement('span');
+        placeholder.className = 'vote-participant-photo-placeholder';
+        placeholder.textContent = 'Фото';
+        photoBox.append(placeholder);
+        if (item.performer_photo_url) {
+          const portrait = document.createElement('img');
+          portrait.className = 'vote-participant-photo';
+          portrait.src = item.performer_photo_url;
+          portrait.alt = `Представитель: ${countryName(item.country_code)}`;
+          portrait.loading = 'lazy';
+          portrait.onload = () => { placeholder.hidden = true; };
+          portrait.onerror = () => { portrait.hidden = true; placeholder.hidden = false; };
+          photoBox.append(portrait);
+        } else {
+          placeholder.textContent = 'Нет фото';
+        }
+        identity.append(flag,photoBox);
+        const info = document.createElement('div');
+        info.className = 'vote-participant-info';
+        const country = document.createElement('strong');
+        country.textContent = countryName(item.country_code);
+        const artist = document.createElement('small');
+        artist.textContent = `${item.artist} — ${item.song_title}`;
+        info.append(country,artist);
+        person.append(identity,info);
+        galleryGrid.append(person);
+      });
+      gallery.append(galleryHeading,galleryGrid);
+      panel.append(gallery);
+
       const form = document.createElement('form');
       form.className = 'vote-form';
       const selects = [];
@@ -1015,8 +1082,9 @@
         heart.alt = '';
         const portrait = document.createElement('img');
         portrait.className = 'vote-performer-photo';
-        portrait.alt = 'Фото исполнителя';
+        portrait.alt = 'Фото представителя';
         portrait.loading = 'lazy';
+        portrait.onerror = () => { portrait.hidden = true; };
         preview.append(heart, portrait);
         const select = document.createElement('select');
         select.required = true;
@@ -1213,6 +1281,7 @@
   };
 
   async function loadAppState() {
+    if (stateLoading) return;
     if (!window.SpringVisionAPI?.configured()) {
       $('#seasonStatus').textContent = 'Сервер не подключён';
       $('#seasonCardName').textContent = 'Сезон загружается после подключения сервера';
@@ -1223,8 +1292,10 @@
       renderFinalMedia(null);
       return;
     }
+    stateLoading = true;
     try {
       const state = await window.SpringVisionAPI.request('public_state');
+      lastStateLoadedAt = Date.now();
       currentProfile = state.profile || null;
       currentIsAdmin = Boolean(state.isAdmin);
       $('#admin').hidden = !currentIsAdmin;
@@ -1295,8 +1366,18 @@
     } catch (error) {
       $('#seasonStatus').textContent = 'Нет соединения с сервером';
       toast(error instanceof Error ? error.message : 'Не удалось загрузить SpringVision.');
+    } finally {
+      stateLoading = false;
     }
   }
+
+  // Private Storage image links expire. Refresh app state when the Mini App returns after a while.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() - lastStateLoadedAt > 45 * 60 * 1000) loadAppState();
+  });
+  window.addEventListener('pageshow', () => {
+    if (Date.now() - lastStateLoadedAt > 45 * 60 * 1000) loadAppState();
+  });
 
   if (window.SpringVisionAPI?.configured()) {
     $('#seasonStatus').textContent = 'Подключаемся…';
