@@ -922,6 +922,8 @@
       flag.className = 'heart-flag recap-flag';
       flag.src = `assets/flags/heart/${item.country_code}.svg`;
       flag.alt = '';
+      const found = sortedCountries.find(c => c.code === item.country_code);
+      const countryName = found ? found.name : item.country_code.toUpperCase();
       const identity = document.createElement('div');
       identity.className = 'recap-identity';
       identity.append(flag);
@@ -945,8 +947,6 @@
       const details = document.createElement('div');
       details.className = 'recap-item-details';
       const title = document.createElement('strong');
-      const found = sortedCountries.find(c => c.code === item.country_code);
-      const countryName = found ? found.name : item.country_code.toUpperCase();
       title.textContent = drawOnly
         ? `${item.performance_order ? String(item.performance_order).padStart(2,'0') + '. ' : ''}${countryName}`
         : `${item.performance_order ? String(item.performance_order).padStart(2,'0') + '. ' : ''}${item.artist} — ${item.song_title}`;
