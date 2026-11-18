@@ -503,6 +503,37 @@ Deno.serve(async (request) => {
           };
         }).sort((a: any, b: any) => b.total_points - a.total_points || a.country_name.localeCompare(b.country_name, "ru"));
 
+        // Keep each country's complete jury ballot, not just its aggregated points by destination.
+        const juryBallots = juryAssignments.map((assignment: any) => {
+          const jurorId = String(assignment.user_id);
+          const sourceSubmission = (assignment.submission_id ? submissionsById.get(String(assignment.submission_id)) : null)
+            || submissionsByUser.get(jurorId);
+          const sourceCountry = sourceSubmission ? countryName(sourceSubmission) : "Страна не определена";
+          const votes = (juryVotesResult.data || [])
+            .filter((vote: any) => String(vote.juror_id) === jurorId)
+            .map((vote: any) => {
+              const target = submissionsById.get(String(vote.target_submission_id));
+              return {
+                points: Number(vote.points || 0),
+                target_submission_id: String(vote.target_submission_id),
+                target_country_code: target?.country_code || null,
+                target_country_name: target ? countryName(target) : "Участник не найден",
+                artist: target?.artist || "",
+                song_title: target?.song_title || "",
+                is_random_fallback: Boolean(vote.is_random_fallback),
+              };
+            })
+            .sort((a: any, b: any) => b.points - a.points);
+          return {
+            country_code: sourceSubmission?.country_code || null,
+            country_name: sourceCountry,
+            voted: votes.length > 0,
+            vote_count: votes.length,
+            automatic: votes.length > 0 && votes.every((vote: any) => vote.is_random_fallback),
+            votes,
+          };
+        }).sort((a: any, b: any) => a.country_name.localeCompare(b.country_name, "ru"));
+
         for (const row of matrixByCountry.values()) {
           row.voted_jurors = Math.min(row.expected_jurors, [...jurorsWithVotes].filter(id => jurorSources.get(id)?.code === row.country_code).length);
           row.automatic_jurors = Math.min(row.voted_jurors, [...automaticJurors].filter(id => jurorSources.get(id)?.code === row.country_code).length);
@@ -527,6 +558,7 @@ Deno.serve(async (request) => {
             ballots: ballotIds.length, point_rows: televotePointRows.length, total_points: televoteTotalPoints,
           },
           standings,
+          jury_ballots: juryBallots,
           jury_matrix: [...matrixByCountry.values()].sort((a, b) => a.country_name.localeCompare(b.country_name, "ru")),
         });
       }
