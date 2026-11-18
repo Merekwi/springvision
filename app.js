@@ -421,7 +421,7 @@
         $('#refreshVoteStatus').addEventListener('click', () => renderVoteStatus().catch(adminError));
         seasonSelect.addEventListener('change', () => renderVoteStatus().catch(adminError));
       } else if (section === 'results') {
-        showAdminDialog('Результаты сезона', `<div class="admin-form-row"><label>Сезон<select id="adminResultsSeason"></select></label><button type="button" class="button button-small" id="refreshAdminResults">Обновить</button></div><div class="admin-results-tabs" role="tablist" aria-label="Режим просмотра результатов"><button type="button" class="admin-results-tab is-active" data-results-view="interim" aria-selected="true">Промежуточные</button><button type="button" class="admin-results-tab" data-results-view="final" aria-selected="false">Итоговые</button></div><p id="adminResultsNote" class="admin-message" role="status">Выбери сезон.</p><div id="adminResultsSummary" class="admin-results-summary"></div><section class="admin-results-section"><h3 id="adminResultsRankingTitle">Таблица результатов</h3><div id="adminResultsRanking" class="admin-results-table-wrap"></div></section><section class="admin-results-section"><h3>Баллы жюри от каждой страны</h3><p class="admin-results-help">В строках указаны страны, выставлявшие оценки; в столбцах — участники, получившие баллы. Звёздочка отмечает автоматически назначенные оценки.</p><div id="adminResultsMatrix" class="admin-results-table-wrap"></div></section><section class="admin-results-section"><h3>Телеголосование</h3><div id="adminResultsTelevote" class="admin-results-summary"></div><p class="admin-results-help">Телеголосование анонимно: приложение показывает количество бюллетеней и баллы каждой страны-получателя, но не раскрывает, кто за кого голосовал.</p></section>`);
+        showAdminDialog('Результаты сезона', `<div class="admin-form-row"><label>Сезон<select id="adminResultsSeason"></select></label><button type="button" class="button button-small" id="refreshAdminResults">Обновить</button></div><div class="admin-results-tabs" role="tablist" aria-label="Режим просмотра результатов"><button type="button" class="admin-results-tab is-active" data-results-view="interim" aria-selected="true">Промежуточные</button><button type="button" class="admin-results-tab" data-results-view="final" aria-selected="false">Итоговые</button></div><p id="adminResultsNote" class="admin-message" role="status">Выбери сезон.</p><div id="adminResultsSummary" class="admin-results-summary"></div><section class="admin-results-section"><h3 id="adminResultsRankingTitle">Таблица результатов</h3><div id="adminResultsRanking" class="admin-results-table-wrap"></div></section><section class="admin-results-section"><h3>Кому и сколько баллов поставила каждая страна</h3><p class="admin-results-help">Полные бюллетени жюри по каждой стране: 12, 10, 8, 7, 6, 5, 4, 3, 2 и 1 балл с указанием получателя. Автоматически назначенные оценки отмечены отдельно.</p><div id="adminResultsMatrix" class="admin-results-table-wrap"></div></section><section class="admin-results-section"><h3>Телеголосование</h3><div id="adminResultsTelevote" class="admin-results-summary"></div><p class="admin-results-help">Телеголосование анонимно: приложение показывает количество бюллетеней и баллы каждой страны-получателя, но не раскрывает, кто за кого голосовал.</p></section>`);
         const seasonSelect = $('#adminResultsSeason');
         const seasons = await fillSeasonSelect(seasonSelect);
         let activeView = 'interim';
@@ -503,38 +503,74 @@
             ranking.append(table);
           }
 
-          const matrixRows = result.jury_matrix || [];
-          const participants = result.standings || [];
-          if (!matrixRows.length || !participants.length) {
-            const empty = document.createElement('p'); empty.className = 'admin-empty'; empty.textContent = 'Нет сохранённых бюллетеней жюри.';
+          const juryBallots = result.jury_ballots || [];
+          if (!juryBallots.length) {
+            const empty = document.createElement('p');
+            empty.className = 'admin-empty';
+            empty.textContent = 'В этом сезоне пока нет назначенного жюри.';
             matrix.append(empty);
           } else {
-            const headerLabels = ['Страна жюри', ...participants.map(item => item.country_name), 'Статус'];
-            const table = createTable(headerLabels, 'admin-results-matrix-table');
-            const body = $('tbody', table);
-            matrixRows.forEach(source => {
-              const tr = document.createElement('tr');
-              const sourceCell = document.createElement('th'); sourceCell.scope = 'row'; sourceCell.textContent = source.country_name;
-              tr.append(sourceCell);
-              participants.forEach(target => {
-                const td = document.createElement('td');
-                const points = Number(source.points?.[target.submission_id] || 0);
-                if (points) {
-                  td.textContent = String(points) + (source.automatic_targets?.includes(target.submission_id) ? '*' : '');
-                  td.className = 'has-points';
-                } else {
-                  td.textContent = '·';
-                  td.className = 'no-points';
-                }
-                tr.append(td);
-              });
-              const status = document.createElement('td');
-              status.className = 'admin-results-status-cell';
-              status.textContent = `${source.voted_jurors || 0}/${source.expected_jurors || 0}` + (source.automatic_jurors ? ` · авто: ${source.automatic_jurors}` : '');
-              tr.append(status);
-              body.append(tr);
+            juryBallots.forEach(ballot => {
+              const card = document.createElement('article');
+              card.className = 'admin-jury-ballot';
+              const header = document.createElement('div');
+              header.className = 'admin-jury-ballot-header';
+              if (ballot.country_code) {
+                const flag = document.createElement('img');
+                flag.className = 'admin-jury-ballot-flag';
+                flag.src = `assets/flags/heart/${ballot.country_code}.svg`;
+                flag.alt = '';
+                flag.onerror = () => { flag.hidden = true; };
+                header.append(flag);
+              }
+              const heading = document.createElement('strong');
+              heading.textContent = ballot.country_name;
+              const status = document.createElement('span');
+              status.className = ballot.automatic ? 'admin-jury-ballot-status is-auto' : ballot.voted ? 'admin-jury-ballot-status is-voted' : 'admin-jury-ballot-status';
+              status.textContent = !ballot.voted ? 'Ожидается' : ballot.automatic ? 'Назначено автоматически' : 'Голос сохранён';
+              header.append(heading, status);
+              card.append(header);
+              const awards = document.createElement('div');
+              awards.className = 'admin-jury-awards';
+              if (!ballot.votes?.length) {
+                const empty = document.createElement('p');
+                empty.className = 'admin-jury-ballot-empty';
+                empty.textContent = 'Эта страна ещё не отправила оценки.';
+                awards.append(empty);
+              } else {
+                ballot.votes.forEach(vote => {
+                  const line = document.createElement('div');
+                  line.className = 'admin-jury-award-row';
+                  const points = document.createElement('strong');
+                  points.className = 'admin-jury-award-points';
+                  points.textContent = String(vote.points);
+                  const arrow = document.createElement('span');
+                  arrow.className = 'admin-jury-award-arrow';
+                  arrow.textContent = '→';
+                  const target = document.createElement('div');
+                  target.className = 'admin-jury-award-target';
+                  const targetCountry = document.createElement('strong');
+                  targetCountry.textContent = vote.target_country_name;
+                  const song = document.createElement('small');
+                  song.textContent = vote.artist ? `${vote.artist} — ${vote.song_title}` : '';
+                  target.append(targetCountry);
+                  if (song.textContent) target.append(song);
+                  line.append(points, arrow, target);
+                  if (vote.is_random_fallback) {
+                    const auto = document.createElement('span');
+                    auto.className = 'admin-jury-award-auto';
+                    auto.textContent = 'авто';
+                    line.append(auto);
+                  }
+                  awards.append(line);
+                });
+              }
+              const count = document.createElement('small');
+              count.className = 'admin-jury-ballot-count';
+              count.textContent = `${ballot.vote_count || 0} из 10 оценок`;
+              card.append(awards, count);
+              matrix.append(card);
             });
-            matrix.append(table);
           }
 
           addStat(televote, 'Бюллетени зрителей', String(result.televote?.ballots || 0), 'Анонимные голоса');
