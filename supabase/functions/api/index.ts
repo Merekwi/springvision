@@ -209,20 +209,20 @@ Deno.serve(async (request) => {
         if (seasonResult.error) throw new Error(seasonResult.error.message);
         const season = seasonResult.data;
         if (!season) return json({ profile, isAdmin, season: null, submissions: [], countries: [], reservedCountryCodes: [], ownSubmissionId: null, juryResults: null, televoteResults: null, overallResults: null });
-        const juryRole = await db.from("season_jury").select("user_id").eq("season_id", season.id).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
+        const juryRole = await db.from("season_jury").select("user_id,submission_id").eq("season_id", season.id).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
         // An open televote must always expose the approved ballot options to voters.
         const canSeeParticipants = isAdmin || season.participant_list_published || Boolean(juryRole.data) || (season.status === "televoting" && season.televote_open);
         let submissions: Record<string, unknown>[] = [];
         if (canSeeParticipants) {
           const result = await db.from("submissions")
-            .select("id,country_code,artist,song_title,performance_url,recap_storage_path,performance_order,status")
+            .select("id,country_code,artist,song_title,performance_url,recap_storage_path,performer_photo_storage_path,performance_order,status")
             .eq("season_id", season.id).eq("status", "approved").order(season.draw_published || isAdmin ? "performance_order" : "created_at", { ascending: true, nullsFirst: false });
           if (result.error) throw new Error(result.error.message);
           submissions = result.data || [];
         }
         const ownSubmissionResult = await db.from("submissions").select("id").eq("season_id",season.id).eq("user_id",profile.id).eq("status","approved").maybeSingle();
         if (ownSubmissionResult.error) throw new Error(ownSubmissionResult.error.message);
-        const ownSubmissionId = ownSubmissionResult.data?.id || null;
+        const ownSubmissionId = juryRole.data?.submission_id || ownSubmissionResult.data?.id || null;
         let publicLogoUrl: string | null = season.logo_url || null;
         if (typeof publicLogoUrl === "string" && publicLogoUrl.startsWith("storage:")) {
           const logo = await db.storage.from(BUCKET).createSignedUrl(publicLogoUrl.slice("storage:".length), 3600);
@@ -279,11 +279,17 @@ Deno.serve(async (request) => {
         }
         const submissionsWithUrls = await Promise.all(submissions.map(async (row) => {
           const path = typeof row.recap_storage_path === "string" ? row.recap_storage_path : "";
+          const photoPath = typeof row.performer_photo_storage_path === "string" ? row.performer_photo_storage_path : "";
           const publicOrder = isAdmin || season.draw_published;
           const safeRow = { ...row, performance_order: publicOrder ? row.performance_order : null };
-          if (!path) return { ...safeRow, recap_url: null };
-          // Signed URLs expire; obtain a fresh one only when the participant clicks the recap.
-          return { ...safeRow, recap_url: null };
+          let performer_photo_url: string | null = null;
+          if (photoPath) {
+            const signedPhoto = await db.storage.from(BUCKET).createSignedUrl(photoPath, 3600);
+            if (signedPhoto.error) console.error("Could not sign performer photo URL:", row.id, signedPhoto.error);
+            performer_photo_url = signedPhoto.data?.signedUrl || null;
+          }
+          // Reacquire recap URLs only when clicked; photo previews receive short-lived signed links.
+          return { ...safeRow, recap_url: null, performer_photo_url };
         }));
         return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, ownSubmissionId, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
       }
@@ -296,7 +302,13 @@ Deno.serve(async (request) => {
         const songTitle = String(body.songTitle || "").trim();
         const performanceUrl = String(body.performanceUrl || "").trim();
         const recap = form.get("recap");
+        const performerPhoto = form.get("performerPhoto");
         if (!(recap instanceof File)) throw new Error("Прикрепите 30-секундный рекап.");
+        if (!(performerPhoto instanceof File)) throw new Error("Прикрепите фото представителя.");
+        if (!performerPhoto.size || performerPhoto.size > 10 * 1024 * 1024) throw new Error("Фото представителя должно быть не пустым и не превышать 10 МБ.");
+        const photoTypes: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+        const photoExtension = photoTypes[performerPhoto.type];
+        if (!photoExtension) throw new Error("Для фото поддерживаются JPG, PNG и WebP.");
         if (!seasonId || !countryCode || !artist || !songTitle || !/^https?:\/\//i.test(performanceUrl)) throw new Error("Проверьте все поля заявки.");
         const season = await seasonById(seasonId);
         const now = Date.now();
@@ -307,13 +319,19 @@ Deno.serve(async (request) => {
         const country = await db.from("countries").select("code").eq("code", countryCode).eq("enabled", true).maybeSingle();
         if (!country.data) throw new Error("Страна не найдена или недоступна.");
         const path = `recaps/${seasonId}/${crypto.randomUUID()}-${recap.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80)}`;
+        const photoPath = `performer-photos/${seasonId}/${crypto.randomUUID()}.${photoExtension}`;
         await uploadFile(recap, path);
+        const photoUpload = await db.storage.from(BUCKET).upload(photoPath, performerPhoto, { contentType: performerPhoto.type, upsert: false });
+        if (photoUpload.error) {
+          await db.storage.from(BUCKET).remove([path]);
+          throw new Error("Не удалось сохранить фото представителя: " + photoUpload.error.message);
+        }
         const result = await db.from("submissions").insert({
           season_id: seasonId, user_id: profile.id, country_code: countryCode, artist, song_title: songTitle,
-          performance_url: performanceUrl, recap_storage_path: path, status: "pending",
+          performance_url: performanceUrl, recap_storage_path: path, performer_photo_storage_path: photoPath, status: "pending",
         }).select("id,status").single();
         if (result.error) {
-          await db.storage.from(BUCKET).remove([path]);
+          await db.storage.from(BUCKET).remove([path, photoPath]);
           if (result.error.code === "23505") throw new Error("Эта страна или ваш аккаунт уже заняты заявкой в текущем сезоне.");
           throw new Error("Не удалось сохранить заявку: " + result.error.message);
         }
@@ -592,7 +610,48 @@ Deno.serve(async (request) => {
         const result = await db.from("submissions").select("*,countries(name,flag_path),profiles!submissions_user_id_fkey(telegram_id,telegram_username,display_name)")
           .eq("season_id", seasonId).order("created_at", { ascending: true });
         if (result.error) throw new Error(result.error.message);
-        return json({ submissions: result.data || [] });
+        const submissions = await Promise.all((result.data || []).map(async (row: any) => {
+          let performer_photo_url: string | null = null;
+          if (row.performer_photo_storage_path) {
+            const signed = await db.storage.from(BUCKET).createSignedUrl(row.performer_photo_storage_path, 3600);
+            if (signed.error) console.error("Could not sign admin performer photo URL:", row.id, signed.error);
+            performer_photo_url = signed.data?.signedUrl || null;
+          }
+          return { ...row, performer_photo_url };
+        }));
+        return json({ submissions });
+      }
+
+      case "admin_upload_performer_photo": {
+        requireAdmin();
+        if (!form) throw new Error("Загрузите файл фотографии.");
+        const seasonId = String(body.seasonId || "");
+        const submissionId = String(body.submissionId || "");
+        const file = form.get("file");
+        if (!seasonId || !submissionId || !(file instanceof File)) throw new Error("Не указаны сезон, заявка или файл.");
+        if (!file.size || file.size > 10 * 1024 * 1024) throw new Error("Фото должно быть не пустым и не превышать 10 МБ.");
+        const photoTypes: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+        const extension = photoTypes[file.type];
+        if (!extension) throw new Error("Поддерживаются JPG, PNG и WebP.");
+        const current = await db.from("submissions").select("id,season_id,performer_photo_storage_path")
+          .eq("id", submissionId).eq("season_id", seasonId).maybeSingle();
+        if (current.error || !current.data) throw new Error("Заявка не найдена в выбранном сезоне.");
+        const newPath = `performer-photos/${seasonId}/${crypto.randomUUID()}.${extension}`;
+        const uploaded = await db.storage.from(BUCKET).upload(newPath, file, { contentType: file.type, upsert: false });
+        if (uploaded.error) throw new Error("Не удалось загрузить фотографию: " + uploaded.error.message);
+        const updated = await db.from("submissions").update({ performer_photo_storage_path: newPath })
+          .eq("id", submissionId).eq("season_id", seasonId).select("id,performer_photo_storage_path").single();
+        if (updated.error) {
+          await db.storage.from(BUCKET).remove([newPath]);
+          throw new Error("Не удалось привязать фотографию к заявке: " + updated.error.message);
+        }
+        if (current.data.performer_photo_storage_path && current.data.performer_photo_storage_path !== newPath) {
+          const removed = await db.storage.from(BUCKET).remove([current.data.performer_photo_storage_path]);
+          if (removed.error) console.error("New performer photo saved, old photo cleanup failed:", current.data.id, removed.error);
+        }
+        await writeAudit("performer_photo_uploaded", "submission", submissionId, { season_id: seasonId });
+        const signed = await db.storage.from(BUCKET).createSignedUrl(newPath, 3600);
+        return json({ ok: true, performer_photo_url: signed.data?.signedUrl || null });
       }
 
       case "admin_review_submission": {
@@ -828,12 +887,22 @@ Deno.serve(async (request) => {
         if (!season.jury_voting_open || season.status !== "jury_voting") throw new Error("Голосование жюри закрыто.");
         if (season.jury_deadline && Date.now() > Date.parse(season.jury_deadline)) throw new Error("Срок голосования истёк.");
         const jury = await db.from("season_jury").select("submission_id").eq("season_id",seasonId).eq("user_id",profile.id).is("revoked_at",null).maybeSingle();
-        if (!jury.data) throw new Error("У вас нет права жюри в этом сезоне.");
+        if (jury.error || !jury.data) throw new Error("У вас нет права жюри в этом сезоне.");
         const own = await db.from("submissions").select("id").eq("season_id",seasonId).eq("user_id",profile.id).eq("status","approved").maybeSingle();
+        if (own.error) throw new Error("Не удалось проверить вашу заявку: " + own.error.message);
         const targets = await db.from("submissions").select("id,user_id,status").eq("season_id",seasonId).in("id",votes.map(v=>v.submissionId)).eq("status","approved");
         if (targets.error || targets.data?.length !== 10) throw new Error("В голосовании есть участник, которого нет в утверждённом списке.");
-        const ownSubmissionId = own.data?.id;
-        if (ownSubmissionId && votes.some(v=>v.submissionId===ownSubmissionId)) throw new Error("Нельзя голосовать за собственную заявку.");
+        const ownSubmissionId = jury.data.submission_id || own.data?.id || null;
+        const twelvePointVote = votes.find(v => v.points === 12);
+        if (twelvePointVote) {
+          const twelvePointTarget = (targets.data || []).find((row: any) => String(row.id) === String(twelvePointVote.submissionId));
+          if (ownSubmissionId && String(twelvePointTarget?.id) === String(ownSubmissionId)) {
+            throw new Error("Нельзя поставить 12 баллов собственной стране.");
+          }
+          if (twelvePointTarget && String(twelvePointTarget.user_id) === String(profile.id)) {
+            throw new Error("Нельзя поставить 12 баллов собственной стране.");
+          }
+        }
         await db.from("jury_votes").delete().eq("season_id",seasonId).eq("juror_id",profile.id).eq("is_random_fallback",false);
         const saved = await db.from("jury_votes").insert(votes.map(v=>({season_id:seasonId,juror_id:profile.id,target_submission_id:v.submissionId,points:v.points})));
         if (saved.error) throw new Error("Не удалось сохранить голос жюри: " + saved.error.message);
