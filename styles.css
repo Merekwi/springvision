@@ -142,3 +142,35 @@
   .vote-row { display: grid; grid-template-columns: 78px auto; }
   .vote-row select { grid-column: 1 / -1; }
 }
+
+
+/* Admin-only standings, country-by-country jury matrix and interim/final tabs. */
+.admin-results-tabs{display:flex;gap:8px;margin:16px 0 10px;border-bottom:1px solid var(--line);padding-bottom:9px}
+.admin-results-tab{border:1px solid var(--line);border-radius:999px;background:#ffffff06;color:var(--muted);padding:9px 14px;font:700 11px Manrope,sans-serif;cursor:pointer}
+.admin-results-tab.is-active{background:#a18cff20;border-color:#a18cff88;color:#eee8ff}
+.admin-results-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}
+.admin-results-stat{display:grid;gap:5px;min-width:0;padding:13px;border:1px solid var(--line);border-radius:12px;background:#ffffff04}
+.admin-results-stat span{font-size:10px;color:var(--muted)}
+.admin-results-stat strong{font-size:21px;color:#f5efff;overflow-wrap:anywhere}
+.admin-results-stat small{font-size:10px;color:var(--muted);line-height:1.5}
+.admin-results-section{margin-top:22px}
+.admin-results-section h3{margin:0 0 8px}
+.admin-results-help{margin:0 0 10px;color:var(--muted);font-size:10px;line-height:1.6}
+.admin-results-table-wrap{width:100%;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#ffffff03}
+.admin-results-table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+.admin-results-table th,.admin-results-table td{padding:10px 9px;border-bottom:1px solid #ffffff10;text-align:left;vertical-align:middle}
+.admin-results-table thead th{position:sticky;top:0;background:#19182f;color:#c7baff;font-size:10px;z-index:1}
+.admin-results-table tbody tr:last-child td,.admin-results-table tbody tr:last-child th{border-bottom:0}
+.admin-results-table tbody th{font-weight:700;color:#eee8ff}
+.admin-results-table td strong,.admin-results-table td small{display:block}
+.admin-results-table td small{margin-top:3px;color:var(--muted);font-size:10px}
+.admin-results-rank{color:#bcaeff;font-weight:800}
+.admin-results-country{min-width:110px;font-weight:700}
+.admin-results-total{color:#ff9dcd;font-weight:800;font-size:14px}
+.admin-results-matrix-table{min-width:max-content}
+.admin-results-matrix-table th:first-child{position:sticky;left:0;background:#19182f;z-index:2;min-width:145px}
+.admin-results-matrix-table td{text-align:center;min-width:48px}
+.admin-results-matrix-table td.has-points{color:#f4c5df;font-weight:800}
+.admin-results-matrix-table td.no-points{color:#53516b}
+.admin-results-status-cell{color:var(--muted);font-size:10px}
+@media(max-width:520px){.admin-results-tab{flex:1;padding:9px 7px}.admin-results-stat{padding:10px}.admin-results-table th,.admin-results-table td{padding:8px 7px}}
