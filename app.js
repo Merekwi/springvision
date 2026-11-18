@@ -172,6 +172,15 @@
       const country = sortedCountries.find(c => c.code === row.country_code);
       title.textContent = `${country?.name || row.country_code.toUpperCase()} — ${row.artist} / ${row.song_title}`;
       const applicant = row.profiles || {};
+      let portrait = null;
+      if (row.performer_photo_url) {
+        portrait = document.createElement('img');
+        portrait.className = 'admin-performer-photo';
+        portrait.src = row.performer_photo_url;
+        portrait.alt = `Фото представителя ${country?.name || row.country_code.toUpperCase()}`;
+        portrait.loading = 'lazy';
+        portrait.onerror = () => { portrait.hidden = true; };
+      }
       const applicantInfo = document.createElement('p');
       applicantInfo.className = 'admin-applicant';
       const applicantName = applicant.display_name || 'Пользователь Telegram';
@@ -189,6 +198,31 @@
       feedback.setAttribute('role','status');
       const actions = document.createElement('div');
       actions.className = 'admin-inline-actions';
+      const photoInput = document.createElement('input');
+      photoInput.type = 'file';
+      photoInput.accept = 'image/jpeg,image/png,image/webp';
+      photoInput.hidden = true;
+      const photoButton = document.createElement('button');
+      photoButton.type = 'button';
+      photoButton.className = 'button button-ghost button-small';
+      photoButton.textContent = row.performer_photo_url ? 'Заменить фото' : 'Добавить фото';
+      photoButton.addEventListener('click', () => photoInput.click());
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files?.[0];
+        if (!file) return;
+        photoButton.disabled = true;
+        feedback.textContent = 'Загружаем фото представителя…';
+        try {
+          await window.SpringVisionAPI.requestForm('admin_upload_performer_photo', { seasonId, submissionId: row.id }, 'file', file);
+          feedback.textContent = 'Фото сохранено и привязано к заявке.';
+          await loadAdminApplications();
+        } catch (error) {
+          feedback.textContent = error instanceof Error ? error.message : 'Не удалось загрузить фото.';
+          photoButton.disabled = false;
+          photoInput.value = '';
+        }
+      });
+      actions.append(photoButton, photoInput);
       if (row.recap_storage_path) {
         const recap = document.createElement('button');
         recap.type = 'button'; recap.className = 'button button-ghost button-small'; recap.textContent = 'Рекап';
@@ -256,7 +290,9 @@
           ? 'Право жюри выдано для этого сезона.'
           : row.status === 'rejected' ? 'Заявка уже отклонена.' : 'Эта заявка больше не рассматривается.';
       }
-      card.append(title,applicantInfo,status,comment,feedback,actions);
+      card.append(title);
+      if (portrait) card.append(portrait);
+      card.append(applicantInfo,status,comment,feedback,actions);
       list.append(card);
     });
   };
@@ -862,7 +898,17 @@
         country.textContent = countryName;
         details.append(country);
       }
-      card.append(flag,details);
+      if (!drawOnly && item.performer_photo_url) {
+        const portrait = document.createElement('img');
+        portrait.className = 'recap-portrait';
+        portrait.src = item.performer_photo_url;
+        portrait.alt = `Представитель: ${countryName}`;
+        portrait.loading = 'lazy';
+        portrait.onerror = () => { portrait.hidden = true; };
+        card.append(flag,portrait,details);
+      } else {
+        card.append(flag,details);
+      }
       if (!drawOnly && item.recap_storage_path) {
         const link = document.createElement('button');
         link.type = 'button';
