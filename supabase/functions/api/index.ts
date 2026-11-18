@@ -390,6 +390,129 @@ Deno.serve(async (request) => {
         });
       }
 
+      case "admin_results": {
+        requireAdmin();
+        const seasonId = String(body.seasonId || "");
+        if (!seasonId) throw new Error("Не указан сезон.");
+
+        const [seasonResult, submissionsResult, juryResult, juryVotesResult, ballotsResult] = await Promise.all([
+          db.from("seasons").select("id,season_number,title,status,jury_voting_open,televote_open").eq("id", seasonId).maybeSingle(),
+          db.from("submissions").select("id,user_id,country_code,artist,song_title,status,countries(name)")
+            .eq("season_id", seasonId).order("country_code"),
+          db.from("season_jury").select("user_id,submission_id").eq("season_id", seasonId),
+          db.from("jury_votes").select("juror_id,target_submission_id,points,is_random_fallback,created_at").eq("season_id", seasonId),
+          db.from("televote_ballots").select("id").eq("season_id", seasonId),
+        ]);
+        if (seasonResult.error || !seasonResult.data) throw new Error("Сезон не найден.");
+        if (submissionsResult.error) throw new Error("Не удалось получить участников: " + submissionsResult.error.message);
+        if (juryResult.error) throw new Error("Не удалось получить список жюри: " + juryResult.error.message);
+        if (juryVotesResult.error) throw new Error("Не удалось получить оценки жюри: " + juryVotesResult.error.message);
+        if (ballotsResult.error) throw new Error("Не удалось получить телеголосования: " + ballotsResult.error.message);
+
+        const season = seasonResult.data;
+        const allSubmissions = submissionsResult.data || [];
+        const participants = allSubmissions.filter((row: any) => row.status === "approved");
+        const submissionsById = new Map(allSubmissions.map((row: any) => [String(row.id), row]));
+        const submissionsByUser = new Map(allSubmissions.map((row: any) => [String(row.user_id), row]));
+        const juryAssignments = juryResult.data || [];
+        const jurorSources = new Map<string, { code: string; name: string }>();
+        const matrixByCountry = new Map<string, any>();
+
+        for (const assignment of juryAssignments) {
+          const submission = (assignment.submission_id ? submissionsById.get(String(assignment.submission_id)) : null)
+            || submissionsByUser.get(String(assignment.user_id));
+          const relation = Array.isArray(submission?.countries) ? submission.countries[0] : submission?.countries;
+          const code = submission?.country_code || "__unknown__";
+          const name = relation?.name || (code === "__unknown__" ? "Страна не определена" : code.toUpperCase());
+          jurorSources.set(String(assignment.user_id), { code, name });
+          if (!matrixByCountry.has(code)) {
+            matrixByCountry.set(code, {
+              country_code: code, country_name: name, expected_jurors: 0, voted_jurors: 0,
+              automatic_jurors: 0, points: {}, automatic_targets: [],
+            });
+          }
+          matrixByCountry.get(code).expected_jurors++;
+        }
+
+        const juryTotals = new Map<string, number>();
+        const jurorsWithVotes = new Set<string>();
+        const automaticJurors = new Set<string>();
+        for (const vote of juryVotesResult.data || []) {
+          const jurorId = String(vote.juror_id);
+          const source = jurorSources.get(jurorId) || { code: "__unknown__", name: "Страна не определена" };
+          if (!matrixByCountry.has(source.code)) {
+            matrixByCountry.set(source.code, {
+              country_code: source.code, country_name: source.name, expected_jurors: 0,
+              voted_jurors: 0, automatic_jurors: 0, points: {}, automatic_targets: [],
+            });
+          }
+          const matrixRow = matrixByCountry.get(source.code);
+          const targetId = String(vote.target_submission_id);
+          matrixRow.points[targetId] = (Number(matrixRow.points[targetId]) || 0) + Number(vote.points || 0);
+          if (vote.is_random_fallback) {
+            if (!matrixRow.automatic_targets.includes(targetId)) matrixRow.automatic_targets.push(targetId);
+            automaticJurors.add(jurorId);
+          }
+          jurorsWithVotes.add(jurorId);
+          juryTotals.set(targetId, (juryTotals.get(targetId) || 0) + Number(vote.points || 0));
+        }
+
+        const ballotIds = (ballotsResult.data || []).map((row: any) => row.id);
+        let televotePointRows: any[] = [];
+        if (ballotIds.length) {
+          const televotePointsResult = await db.from("televote_points")
+            .select("target_submission_id,points").in("ballot_id", ballotIds);
+          if (televotePointsResult.error) throw new Error("Не удалось рассчитать телеголосование: " + televotePointsResult.error.message);
+          televotePointRows = televotePointsResult.data || [];
+        }
+        const televoteTotals = new Map<string, number>();
+        for (const vote of televotePointRows) {
+          const targetId = String(vote.target_submission_id);
+          televoteTotals.set(targetId, (televoteTotals.get(targetId) || 0) + Number(vote.points || 0));
+        }
+
+        const countryName = (submission: any) => {
+          const relation = Array.isArray(submission.countries) ? submission.countries[0] : submission.countries;
+          return relation?.name || submission.country_code.toUpperCase();
+        };
+        const standings = participants.map((row: any) => {
+          const juryPoints = juryTotals.get(String(row.id)) || 0;
+          const televotePoints = televoteTotals.get(String(row.id)) || 0;
+          return {
+            submission_id: String(row.id), country_code: row.country_code, country_name: countryName(row),
+            artist: row.artist, song_title: row.song_title,
+            jury_points: juryPoints, televote_points: televotePoints, total_points: juryPoints + televotePoints,
+          };
+        }).sort((a: any, b: any) => b.total_points - a.total_points || a.country_name.localeCompare(b.country_name, "ru"));
+
+        for (const row of matrixByCountry.values()) {
+          row.voted_jurors = Math.min(row.expected_jurors, [...jurorsWithVotes].filter(id => jurorSources.get(id)?.code === row.country_code).length);
+          row.automatic_jurors = Math.min(row.voted_jurors, [...automaticJurors].filter(id => jurorSources.get(id)?.code === row.country_code).length);
+        }
+
+        const juryTotalPoints = [...juryTotals.values()].reduce((sum, points) => sum + points, 0);
+        const televoteTotalPoints = [...televoteTotals.values()].reduce((sum, points) => sum + points, 0);
+        const finalAvailable = ["finished", "archived"].includes(season.status)
+          && !season.jury_voting_open && !season.televote_open;
+
+        return json({
+          season: {
+            id: season.id, season_number: season.season_number, title: season.title, status: season.status,
+            jury_voting_open: season.jury_voting_open, televote_open: season.televote_open,
+          },
+          finalAvailable,
+          jury: {
+            assigned: juryAssignments.length, voted: jurorsWithVotes.size,
+            automatic: automaticJurors.size, total_points: juryTotalPoints,
+          },
+          televote: {
+            ballots: ballotIds.length, point_rows: televotePointRows.length, total_points: televoteTotalPoints,
+          },
+          standings,
+          jury_matrix: [...matrixByCountry.values()].sort((a, b) => a.country_name.localeCompare(b.country_name, "ru")),
+        });
+      }
+
       case "admin_set_role": {
         if (profile.role !== "super_admin") throw new Error("Назначать администраторов может только главный администратор.");
         const telegramId = Number(body.telegramId);
