@@ -384,6 +384,144 @@
         }
         $('#refreshVoteStatus').addEventListener('click', () => renderVoteStatus().catch(adminError));
         seasonSelect.addEventListener('change', () => renderVoteStatus().catch(adminError));
+      } else if (section === 'results') {
+        showAdminDialog('Результаты сезона', `<div class="admin-form-row"><label>Сезон<select id="adminResultsSeason"></select></label><button type="button" class="button button-small" id="refreshAdminResults">Обновить</button></div><div class="admin-results-tabs" role="tablist" aria-label="Режим просмотра результатов"><button type="button" class="admin-results-tab is-active" data-results-view="interim" aria-selected="true">Промежуточные</button><button type="button" class="admin-results-tab" data-results-view="final" aria-selected="false">Итоговые</button></div><p id="adminResultsNote" class="admin-message" role="status">Выбери сезон.</p><div id="adminResultsSummary" class="admin-results-summary"></div><section class="admin-results-section"><h3 id="adminResultsRankingTitle">Таблица результатов</h3><div id="adminResultsRanking" class="admin-results-table-wrap"></div></section><section class="admin-results-section"><h3>Баллы жюри от каждой страны</h3><p class="admin-results-help">В строках указаны страны, выставлявшие оценки; в столбцах — участники, получившие баллы. Звёздочка отмечает автоматически назначенные оценки.</p><div id="adminResultsMatrix" class="admin-results-table-wrap"></div></section><section class="admin-results-section"><h3>Телеголосование</h3><div id="adminResultsTelevote" class="admin-results-summary"></div><p class="admin-results-help">Телеголосование анонимно: приложение показывает количество бюллетеней и баллы каждой страны-получателя, но не раскрывает, кто за кого голосовал.</p></section>`);
+        const seasonSelect = $('#adminResultsSeason');
+        const seasons = await fillSeasonSelect(seasonSelect);
+        let activeView = 'interim';
+        const renderAdminResults = async () => {
+          const seasonId = await selectedSeason('#adminResultsSeason');
+          const note = $('#adminResultsNote');
+          const summary = $('#adminResultsSummary');
+          const ranking = $('#adminResultsRanking');
+          const matrix = $('#adminResultsMatrix');
+          const televote = $('#adminResultsTelevote');
+          const rankingTitle = $('#adminResultsRankingTitle');
+          note.textContent = 'Загружаем результаты…';
+          summary.replaceChildren();
+          ranking.replaceChildren();
+          matrix.replaceChildren();
+          televote.replaceChildren();
+          const result = await window.SpringVisionAPI.request('admin_results', { seasonId });
+          const finalReady = Boolean(result.finalAvailable);
+          if (activeView === 'final') {
+            note.textContent = finalReady
+              ? 'Финальные результаты рассчитаны. Их публикация для зрителей по-прежнему управляется отдельно в настройках сезона.'
+              : 'Сезон ещё не завершён. Здесь показан текущий предварительный рейтинг, а не зафиксированный финал.';
+            rankingTitle.textContent = finalReady ? 'Финальная таблица' : 'Предварительная таблица';
+          } else {
+            note.textContent = 'Промежуточный срез: отображаются все оценки, уже сохранённые в системе. Пока голосование открыто, суммы могут изменяться.';
+            rankingTitle.textContent = 'Текущий рейтинг';
+          }
+
+          const addStat = (parent, label, value, detail) => {
+            const card = document.createElement('article');
+            card.className = 'admin-results-stat';
+            const caption = document.createElement('span'); caption.textContent = label;
+            const number = document.createElement('strong'); number.textContent = value;
+            const small = document.createElement('small'); small.textContent = detail;
+            card.append(caption, number, small);
+            parent.append(card);
+          };
+          addStat(summary, 'Бюллетени жюри', `${result.jury?.voted || 0} / ${result.jury?.assigned || 0}`, `Автоматически назначено: ${result.jury?.automatic || 0}`);
+          addStat(summary, 'Телеголосование', String(result.televote?.ballots || 0), `Бюллетеней · ${result.televote?.point_rows || 0} оценок`);
+          addStat(summary, 'Всего баллов', String((result.jury?.total_points || 0) + (result.televote?.total_points || 0)), `Жюри: ${result.jury?.total_points || 0} · зрители: ${result.televote?.total_points || 0}`);
+
+          const createTable = (headers, className = '') => {
+            const table = document.createElement('table');
+            table.className = `admin-results-table ${className}`.trim();
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            headers.forEach(label => {
+              const th = document.createElement('th');
+              th.textContent = label;
+              headRow.append(th);
+            });
+            thead.append(headRow);
+            table.append(thead, document.createElement('tbody'));
+            return table;
+          };
+          const rankingRows = result.standings || [];
+          if (!rankingRows.length) {
+            const empty = document.createElement('p'); empty.className = 'admin-empty'; empty.textContent = 'В этом сезоне пока нет одобренных участников.';
+            ranking.append(empty);
+          } else {
+            const table = createTable(['Место', 'Страна', 'Исполнитель / песня', 'Жюри', 'Телеголосование', 'Всего']);
+            const body = $('tbody', table);
+            rankingRows.forEach((entry, index) => {
+              const tr = document.createElement('tr');
+              const rank = document.createElement('td'); rank.className = 'admin-results-rank'; rank.textContent = String(index + 1);
+              const country = document.createElement('td'); country.className = 'admin-results-country';
+              const name = document.createElement('strong'); name.textContent = entry.country_name;
+              country.append(name);
+              const song = document.createElement('td');
+              const artist = document.createElement('strong'); artist.textContent = entry.artist;
+              const title = document.createElement('small'); title.textContent = entry.song_title;
+              song.append(artist, title);
+              const jury = document.createElement('td'); jury.textContent = String(entry.jury_points);
+              const tv = document.createElement('td'); tv.textContent = String(entry.televote_points);
+              const total = document.createElement('td'); total.className = 'admin-results-total'; total.textContent = String(entry.total_points);
+              tr.append(rank, country, song, jury, tv, total);
+              body.append(tr);
+            });
+            ranking.append(table);
+          }
+
+          const matrixRows = result.jury_matrix || [];
+          const participants = result.standings || [];
+          if (!matrixRows.length || !participants.length) {
+            const empty = document.createElement('p'); empty.className = 'admin-empty'; empty.textContent = 'Нет сохранённых бюллетеней жюри.';
+            matrix.append(empty);
+          } else {
+            const headerLabels = ['Страна жюри', ...participants.map(item => item.country_name), 'Статус'];
+            const table = createTable(headerLabels, 'admin-results-matrix-table');
+            const body = $('tbody', table);
+            matrixRows.forEach(source => {
+              const tr = document.createElement('tr');
+              const sourceCell = document.createElement('th'); sourceCell.scope = 'row'; sourceCell.textContent = source.country_name;
+              tr.append(sourceCell);
+              participants.forEach(target => {
+                const td = document.createElement('td');
+                const points = Number(source.points?.[target.submission_id] || 0);
+                if (points) {
+                  td.textContent = String(points) + (source.automatic_targets?.includes(target.submission_id) ? '*' : '');
+                  td.className = 'has-points';
+                } else {
+                  td.textContent = '·';
+                  td.className = 'no-points';
+                }
+                tr.append(td);
+              });
+              const status = document.createElement('td');
+              status.className = 'admin-results-status-cell';
+              status.textContent = `${source.voted_jurors || 0}/${source.expected_jurors || 0}` + (source.automatic_jurors ? ` · авто: ${source.automatic_jurors}` : '');
+              tr.append(status);
+              body.append(tr);
+            });
+            matrix.append(table);
+          }
+
+          addStat(televote, 'Бюллетени зрителей', String(result.televote?.ballots || 0), 'Анонимные голоса');
+          addStat(televote, 'Баллы телеголосования', String(result.televote?.total_points || 0), 'Сумма всех полученных баллов');
+          const tabs = $$('.admin-results-tab');
+          tabs.forEach(tab => {
+            const selected = tab.dataset.resultsView === activeView;
+            tab.classList.toggle('is-active', selected);
+            tab.setAttribute('aria-selected', String(selected));
+          });
+        };
+        if (seasons.length) {
+          seasonSelect.value = seasons[0].id;
+          await renderAdminResults();
+        } else {
+          $('#adminResultsNote').textContent = 'Сезонов пока нет.';
+        }
+        $$('.admin-results-tab').forEach(tab => tab.addEventListener('click', () => {
+          activeView = tab.dataset.resultsView;
+          renderAdminResults().catch(adminError);
+        }));
+        $('#refreshAdminResults').addEventListener('click', () => renderAdminResults().catch(adminError));
+        seasonSelect.addEventListener('change', () => renderAdminResults().catch(adminError));
       } else if (section === 'seasons') {
         showAdminDialog('Управление сезонами',`<form id="createSeasonForm" class="admin-form"><h3>Создать сезон</h3><div class="admin-form-grid"><label>Номер нового сезона<input id="newSeasonNumber" type="number" min="1" readonly required><small>Назначается автоматически по порядку.</small></label><label>Название<input id="newSeasonTitle" maxlength="160" required></label></div><label>Описание<textarea id="newSeasonDescription" rows="2"></textarea></label><label>Ссылка на изображение (необязательно)<input id="newSeasonLogo" type="url" placeholder="https://…"></label><label>Или загрузить изображение сезона<input id="newSeasonImage" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG или WebP, до 10 МБ.</small></label><div class="admin-form-grid"><label>Начало регистрации<input id="newRegOpen" type="datetime-local"></label><label>Дедлайн регистрации<input id="newRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="newJuryDeadline" type="datetime-local"></label><label>Дедлайн телеголосования<input id="newTelevoteDeadline" type="datetime-local"></label><label>Дата конкурса<input id="newContestAt" type="datetime-local"></label></div><button class="button" type="submit">Создать сезон</button><p id="createSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><h3>Управление этапами и публикацией</h3><label>Сезон<select id="adminControlSeason"></select></label><form id="seasonControlsForm" class="admin-form"><label>Статус<select id="controlStatus"><option value="draft">Подготовка</option><option value="registration">Регистрация</option><option value="moderation">Модерация</option><option value="drawn">Жеребьёвка проведена</option><option value="jury_voting">Голосование жюри</option><option value="televoting">Телеголосование</option><option value="finished">Завершён</option><option value="archived">Архив</option></select></label><div class="admin-form-grid"><label>Начало регистрации<input id="controlRegOpen" type="datetime-local"></label><label>Дедлайн регистрации<input id="controlRegClose" type="datetime-local"></label><label>Дедлайн жюри<input id="controlJuryDeadline" type="datetime-local"></label><label>Дедлайн телеголосования<input id="controlTelevoteDeadline" type="datetime-local"></label><label>Дата конкурса<input id="controlContestAt" type="datetime-local"></label></div><div class="admin-checks"><label><input type="checkbox" id="controlParticipants"> Опубликовать участников</label><label><input type="checkbox" id="controlDraw"> Опубликовать жеребьёвку</label><label><input type="checkbox" id="controlJuryOpen"> Открыть голосование жюри</label><label><input type="checkbox" id="controlJuryResults"> Показать результаты жюри</label><label><input type="checkbox" id="controlTelevoteOpen"> Открыть телеголосование</label><label><input type="checkbox" id="controlTelevoteResults"> Показать результаты телеголосования</label><label><input type="checkbox" id="controlOverallResults"> Показать общий результат</label></div><label>Ссылка на Twitch<input type="url" id="controlTwitch" placeholder="https://www.twitch.tv/…"></label><div class="admin-checks"><label><input type="checkbox" id="controlTwitchPublished"> Показывать трансляцию на сайте</label><label><input type="checkbox" id="controlRecordingPublished"> Опубликовать запись финала</label></div><div class="admin-inline-actions"><button type="submit" class="button button-small">Сохранить настройки</button><button type="button" id="adminDrawButton" class="button button-ghost button-small">Провести жеребьёвку</button><button type="button" id="adminCloseJuryButton" class="button button-ghost button-small">Завершить жюривойт</button></div><p id="seasonControlsMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><div class="admin-form"><h3>Изображение сезона</h3><label>Новое изображение (PNG, JPG или WebP, до 10 МБ)<input id="replaceSeasonImage" type="file" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="uploadSeasonImageButton" class="button button-ghost button-small">Загрузить новое изображение</button><p id="seasonImageMessage" class="admin-message" role="status"></p></div><hr class="admin-divider"><form id="deleteSeasonForm" class="admin-form"><h3>Удаление сезона</h3><p>Удалит сезон, заявки, голоса и загруженные файлы. Действие необратимо.</p><label>Для подтверждения введи точное название выбранного сезона<input id="deleteSeasonConfirm" autocomplete="off" placeholder="Название сезона" required></label><button type="submit" class="button button-ghost button-small">Удалить сезон навсегда</button><p id="deleteSeasonMessage" class="admin-message" role="status"></p></form><hr class="admin-divider"><form id="recordingForm" class="admin-form"><h3>Запись финала</h3><label>Видео (до 50 МБ)<input id="recordingFile" type="file" accept="video/mp4,video/webm,video/quicktime" required></label><button class="button button-small" type="submit">Загрузить запись</button><p id="recordingMessage" class="admin-message" role="status"></p></form>`);
         const seasons = await fillSeasonSelect($('#adminControlSeason'));
