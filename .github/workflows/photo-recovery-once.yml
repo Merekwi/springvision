@@ -14,8 +14,10 @@ jobs:
   fingerprint:
     runs-on: ubuntu-latest
     steps:
-      - name: Derive one-way verifier for the existing cron secret
+      - name: Send photo recovery messages through Supabase
         env:
+          SUPABASE_URL: https://dgdjddkaixjlscyqkpwz.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_8e6xqrd2MvKZ4hhTOhg09A_k4QxgSzN
           SPRINGVISION_CRON_SECRET: ${{ secrets.SPRINGVISION_CRON_SECRET }}
         shell: bash
         run: |
@@ -28,3 +30,18 @@ jobs:
           echo "One-time verifier fingerprint: $fingerprint"
           echo "One-time verifier fingerprint: $fingerprint" >> "$GITHUB_STEP_SUMMARY"
           echo "Fingerprint calculated. The original secret was not printed."
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+            -X POST "$SUPABASE_URL/functions/v1/api" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: $SPRINGVISION_CRON_SECRET" \
+            --data '{"action":"cron_jury_photo_dispatch"}')"
+          echo "HTTP status: $http_status"
+          cat "$response_file"
+          if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::Photo recovery dispatch failed."
+            exit 1
+          fi
+          cat "$response_file" >> "$GITHUB_STEP_SUMMARY"
