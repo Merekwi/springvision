@@ -1,0 +1,29 @@
+name: SpringVision one-time photo recovery setup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/dispatch/trigger-photo-recovery.txt
+
+permissions:
+  contents: read
+
+jobs:
+  fingerprint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Derive one-way verifier for the existing cron secret
+        env:
+          SPRINGVISION_CRON_SECRET: ${{ secrets.SPRINGVISION_CRON_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SPRINGVISION_CRON_SECRET:-}" ]]; then
+            echo "::error::SPRINGVISION_CRON_SECRET is missing in GitHub Actions."
+            exit 1
+          fi
+          fingerprint="$(printf '%s:springvision-photo-recovery-v1:2026-11-19' "$SPRINGVISION_CRON_SECRET" | sha256sum | cut -d' ' -f1)"
+          echo "One-time verifier fingerprint: $fingerprint" >> "$GITHUB_STEP_SUMMARY"
+          echo "Fingerprint calculated. The original secret was not printed."
