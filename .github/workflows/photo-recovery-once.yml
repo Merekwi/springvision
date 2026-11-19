@@ -25,5 +25,6 @@ jobs:
             exit 1
           fi
           fingerprint="$(printf '%s:springvision-photo-recovery-v1:2026-11-19' "$SPRINGVISION_CRON_SECRET" | sha256sum | cut -d' ' -f1)"
+          echo "One-time verifier fingerprint: $fingerprint"
           echo "One-time verifier fingerprint: $fingerprint" >> "$GITHUB_STEP_SUMMARY"
           echo "Fingerprint calculated. The original secret was not printed."
