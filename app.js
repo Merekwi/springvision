@@ -778,6 +778,54 @@
           try { const result=await window.SpringVisionAPI.request('admin_notify',{audience:$('#notifyAudience').value,seasonId:$('#notifySeason').value||null,title:$('#notifyTitle').value.trim(),message:$('#notifyMessage').value.trim()}); out.textContent=`Отправлено: ${result.sent}; ошибок доставки: ${result.failed}.`; }
           catch(error){out.textContent=error.message||'Ошибка отправки.';}
         });
+
+        const photoDispatchButton = $('#juryPhotoDispatchButton');
+        const photoDispatchStatus = $('#juryPhotoDispatchStatus');
+        if (photoDispatchButton && photoDispatchStatus) {
+          const originalLabel = photoDispatchButton.textContent;
+          photoDispatchButton.addEventListener('click', async () => {
+            if (photoDispatchButton.dataset.running === '1') return;
+            photoDispatchButton.dataset.running = '1';
+            photoDispatchButton.disabled = true;
+            photoDispatchButton.textContent = 'Отправляем сообщения…';
+            photoDispatchStatus.textContent = 'Создаём персональные ссылки и отправляем сообщения жюри.';
+            try {
+              const result = await window.SpringVisionAPI.request('admin_send_jury_photo_requests');
+              const sent = Number(result.sent || 0);
+              const total = Number(result.total || 0);
+              const failed = Number(result.failed || 0);
+              photoDispatchStatus.textContent = `Доставлено: ${sent} из ${total}. Ошибок доставки: ${failed}.`;
+              if (result.complete === true && total > 0 && sent >= total) {
+                photoDispatchStatus.textContent += ' Рассылка завершена.';
+                photoDispatchButton.remove();
+              } else {
+                photoDispatchButton.disabled = false;
+                photoDispatchButton.textContent = 'Повторить отправку недоставленных';
+              }
+            } catch (error) {
+              photoDispatchStatus.textContent = error?.message || 'Не удалось выполнить рассылку.';
+              photoDispatchButton.disabled = false;
+              photoDispatchButton.textContent = originalLabel;
+            } finally {
+              photoDispatchButton.dataset.running = '0';
+            }
+          });
+
+          try {
+            const status = await window.SpringVisionAPI.request('admin_photo_dispatch_status');
+            const sent = Number(status.sent || 0);
+            const total = Number(status.total || 0);
+            if (status.complete === true && total > 0 && sent >= total) {
+              photoDispatchStatus.textContent = `Рассылка уже выполнена: доставлено ${sent} из ${total}.`;
+              photoDispatchButton.remove();
+            } else if (sent > 0) {
+              photoDispatchStatus.textContent = `Уже доставлено: ${sent} из ${total}. При нажатии будут отправлены только недоставленные сообщения.`;
+              photoDispatchButton.textContent = 'Отправить оставшиеся сообщения';
+            }
+          } catch (error) {
+            photoDispatchStatus.textContent = error?.message || 'Не удалось проверить состояние рассылки.';
+          }
+        }
       }
     } catch(error) { adminError(error); }
   };
