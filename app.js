@@ -1145,7 +1145,7 @@
           const option = document.createElement('option');
           option.value = item.id;
           option.textContent = `${countryName(item.country_code)} — ${item.artist} / ${item.song_title}`;
-          if (isJury && Number(select.dataset.points) === 12 && item.id === state.ownSubmissionId) option.disabled = true;
+          if (isJury && item.id === state.ownSubmissionId) option.disabled = true;
           select.append(option);
         });
         const updatePreview = () => {
@@ -1176,7 +1176,7 @@
         selects.forEach(select => [...select.options].forEach(option => {
           if (!option.value) return;
           const selectedElsewhere = selected.has(option.value) && select.value !== option.value;
-          option.disabled = selectedElsewhere || (isJury && Number(select.dataset.points) === 12 && option.value===state.ownSubmissionId);
+          option.disabled = selectedElsewhere || (isJury && option.value===state.ownSubmissionId);
         }));
       };
       selects.forEach(select => select.addEventListener('change',refreshOptions));
