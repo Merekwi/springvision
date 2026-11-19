@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111126">
+<title>Загрузка фото · SpringVision</title>
+<link rel="stylesheet" href="styles.css?v=20261119-3">
+<script src="config.js"></script>
+<style>
+.photo-recovery{max-width:620px;margin:7vh auto;padding:28px;background:#17172d;border:1px solid rgba(255,255,255,.1);border-radius:22px;color:#f7f5ff}
+.photo-recovery h1{font-size:clamp(26px,5vw,38px);margin:8px 0 12px}.photo-recovery p{color:#c9c5d8;line-height:1.55}
+.photo-recovery .eyebrow{letter-spacing:.16em;color:#c5a7ff;font-size:11px;font-weight:700}
+.photo-recovery img{display:block;max-width:100%;max-height:360px;object-fit:contain;border-radius:14px;margin:18px auto}
+.photo-recovery input{display:block;width:100%;margin:16px 0;padding:12px;background:#22223d;color:white;border:1px solid #55516c;border-radius:10px}
+.photo-recovery button{width:100%;border:0;border-radius:999px;padding:14px 20px;background:#b79aff;color:#171226;font-weight:800;font-size:15px}
+.photo-recovery button:disabled{opacity:.55}.photo-note{font-size:13px}.photo-error{color:#ffaaa8!important}.photo-success{color:#a7efc0!important}
+</style>
+</head>
+<body>
+<main class="photo-recovery">
+<div class="eyebrow">SPRINGVISION · PHOTO RECOVERY</div>
+<h1>Фото представителя</h1>
+<p id="intro">Проверяем персональную ссылку…</p>
+<div id="details"></div>
+<form id="uploadForm" hidden>
+<label for="photoFile">Выберите актуальное фото (PNG, JPG или WebP, до 10 МБ)</label>
+<input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" required>
+<button id="uploadButton" type="submit">Загрузить фото</button>
+</form>
+<p id="status" role="status" class="photo-note"></p>
+</main>
+<script>
+(() => {
+  const cfg=window.SPRINGVISION_CONFIG||{};
+  const token=new URLSearchParams(location.search).get('token')||'';
+  const api=(cfg.supabaseUrl||'').replace(/\/$/,'')+'/functions/v1/api';
+  const intro=document.getElementById('intro'),details=document.getElementById('details'),form=document.getElementById('uploadForm'),status=document.getElementById('status'),button=document.getElementById('uploadButton');
+  async function call(action,formData){
+    const headers={apikey:cfg.supabaseAnonKey||''};
+    let body;
+    if(formData){body=formData;formData.append('action',action);formData.append('token',token);}
+    else {headers['Content-Type']='application/json';body=JSON.stringify({action,token});}
+    const response=await fetch(api,{method:'POST',headers,body});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(result.error||'Ошибка сервера.');
+    return result;
+  }
+  async function init(){
+    if(!token||!cfg.supabaseUrl||!cfg.supabaseAnonKey)throw new Error('Персональная ссылка неполная или недействительна.');
+    const data=await call('jury_photo_info');
+    intro.textContent=data.seasonTitle+' · '+data.artist+' — '+data.songTitle;
+    details.innerHTML='<p><strong>Страна:</strong> '+String(data.countryCode||'').toUpperCase()+'</p>';
+    if(data.currentPhotoUrl){const img=document.createElement('img');img.src=data.currentPhotoUrl;img.alt='Текущая фотография представителя';details.appendChild(img);const p=document.createElement('p');p.textContent='Текущая фотография уже сохранена. Загрузите файл ниже, чтобы подтвердить или заменить её.';details.appendChild(p);}
+    else {const p=document.createElement('p');p.textContent='Сейчас у заявки нет сохранённой фотографии. Загрузите её ниже.';details.appendChild(p);}
+    form.hidden=false;
+  }
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();const file=document.getElementById('photoFile').files[0];
+    if(!file)return;
+    if(file.size>10*1024*1024){status.textContent='Файл превышает 10 МБ.';status.className='photo-note photo-error';return;}
+    if(!['image/png','image/jpeg','image/webp'].includes(file.type)){status.textContent='Поддерживаются только PNG, JPG и WebP.';status.className='photo-note photo-error';return;}
+    button.disabled=true;button.textContent='Загружаем…';status.textContent='Сохраняем фотографию…';
+    try{const fd=new FormData();fd.append('file',file,file.name);const result=await call('jury_photo_upload',fd);form.hidden=true;status.textContent=result.message||'Фото успешно сохранено.';status.className='photo-note photo-success';}
+    catch(error){status.textContent=error.message||'Не удалось загрузить фото.';status.className='photo-note photo-error';button.disabled=false;button.textContent='Повторить загрузку';}
+  });
+  init().catch(error=>{intro.textContent='Не удалось открыть форму';status.textContent=error.message||'Ссылка недействительна.';status.className='photo-note photo-error';});
+})();
+</script>
+</body>
+</html>
