@@ -1,1 +1,3 @@
 Prepare one-time SpringVision photo-recovery dispatch. This file only triggers a workflow; it contains no credentials.
+
+Trigger fingerprint readout.
