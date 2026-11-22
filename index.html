@@ -6,12 +6,19 @@
   <meta name="theme-color" content="#a8c5aa">
   <meta name="description" content="SpringVision — музыкальный конкурс в Telegram.">
   <title>SpringVision — музыкальный конкурс</title>
-  <link rel="stylesheet" href="styles.css?v=20261122-spring-v3">
+  <script>
+    try {
+      if (localStorage.getItem('springvision-theme') === 'dark') {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    } catch (_) {}
+  </script>
+  <link rel="stylesheet" href="styles.css?v=20261122-spring-v4">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="config.js?v=20261024-6"></script>
   <script src="api.js?v=20261024-6"></script>
-  <script defer src="app.js?v=20261122-spring"></script>
+  <script defer src="app.js?v=20261122-theme-1"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -20,6 +27,7 @@
       <button class="menu-toggle" id="menuToggle" aria-label="Открыть меню">☰</button>
       <nav id="mainNav" aria-label="Главная навигация">
         <a href="#season">Сезон</a><a href="#recaps">Рекапы</a><a href="#rules">Правила</a>
+        <button class="button button-small theme-toggle" id="themeToggle" type="button" aria-label="Включить тёмную тему" aria-pressed="false"><span class="theme-toggle-icon" aria-hidden="true">☾</span><span class="theme-toggle-label">Тёмная тема</span></button>
         <button class="button button-small" id="accountButton">Мой аккаунт</button>
       </nav>
     </header>

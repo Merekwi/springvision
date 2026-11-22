@@ -360,3 +360,242 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
  .season-deadline-row{flex-direction:column;gap:1px}.season-deadline-row time{text-align:left}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+
+/* Theme switcher */
+.theme-toggle{white-space:nowrap;min-width:132px;padding-inline:12px;gap:8px}
+.theme-toggle-icon{font-size:16px;line-height:1}
+.theme-toggle-label{font-size:11px}
+.theme-toggle[aria-pressed="true"]{background:rgba(126,110,166,.2);border-color:rgba(126,110,166,.38);color:#51466f;box-shadow:none}
+@media(max-width:760px){
+ .theme-toggle{justify-content:flex-start;width:100%;min-height:42px}
+}
+
+/* Dark theme: a complete, low-glare palette across public and admin surfaces. */
+html[data-theme="dark"]{
+ color-scheme:dark;
+ background:#18251f;
+}
+html[data-theme="dark"] body{
+ color:#e5e9df;
+ background:
+  radial-gradient(ellipse at 9% 3%,rgba(83,119,91,.22),transparent 36%),
+  radial-gradient(ellipse at 94% 18%,rgba(117,76,111,.20),transparent 33%),
+  radial-gradient(ellipse at 50% 100%,rgba(54,91,69,.26),transparent 48%),
+  linear-gradient(135deg,#18251f 0%,#202d27 42%,#242a2b 72%,#302633 100%) !important;
+ background-attachment:fixed;
+ color-scheme:dark;
+}
+html[data-theme="dark"] body,html[data-theme="dark"] body *{scrollbar-color:#526c5b #202e27}
+html[data-theme="dark"] body :is(h1,h2,h3,h4,h5,h6,strong,b,label,th,td,p,span,small,time,li,summary,figcaption){color:inherit}
+html[data-theme="dark"] .brand,
+html[data-theme="dark"] .hero h1,
+html[data-theme="dark"] .hero-stats strong,
+html[data-theme="dark"] .section-heading h2,
+html[data-theme="dark"] .season-card h3,
+html[data-theme="dark"] .info-card h3,
+html[data-theme="dark"] .empty-state h3,
+html[data-theme="dark"] .step-card h3,
+html[data-theme="dark"] .modal-heading h2,
+html[data-theme="dark"] .vote-panel h3,
+html[data-theme="dark"] .results-panel h3,
+html[data-theme="dark"] .final-media-panel h3,
+html[data-theme="dark"] .admin-dialog-content h3{color:#edf0e8}
+html[data-theme="dark"] .brand small,
+html[data-theme="dark"] .topbar nav a,
+html[data-theme="dark"] .text-link,
+html[data-theme="dark"] .footer>a,
+html[data-theme="dark"] .hero-copy>p,
+html[data-theme="dark"] .hero-stats span,
+html[data-theme="dark"] .section-subtitle,
+html[data-theme="dark"] .season-card>p,
+html[data-theme="dark"] .info-card p,
+html[data-theme="dark"] .step-card p,
+html[data-theme="dark"] .footer,
+html[data-theme="dark"] .modal-intro,
+html[data-theme="dark"] .modal-narrow>p,
+html[data-theme="dark"] .modal label small,
+html[data-theme="dark"] .admin-dialog-content p,
+html[data-theme="dark"] .admin-dialog-content small,
+html[data-theme="dark"] .vote-panel>p,
+html[data-theme="dark"] .results-panel>p,
+html[data-theme="dark"] .admin-results-help,
+html[data-theme="dark"] .admin-results-stat span,
+html[data-theme="dark"] .admin-results-stat small,
+html[data-theme="dark"] .admin-jury-ballot-status,
+html[data-theme="dark"] .admin-jury-ballot-count{color:#aebbb0}
+html[data-theme="dark"] .eyebrow{color:#a9c7a9}
+html[data-theme="dark"] .live-dot{background:#d58cac;box-shadow:0 0 0 4px rgba(213,140,172,.16)}
+html[data-theme="dark"] .topbar{border-color:rgba(190,210,190,.14)}
+html[data-theme="dark"] .topbar nav a:hover,
+html[data-theme="dark"] .text-link:hover,
+html[data-theme="dark"] .footer>a:hover{color:#e3a5c0}
+html[data-theme="dark"] .button{
+ background:linear-gradient(110deg,#a96f8a,#776d9f);
+ border-color:rgba(222,195,220,.16);
+ color:#fff;
+ box-shadow:0 8px 22px rgba(0,0,0,.22);
+}
+html[data-theme="dark"] .button-ghost,
+html[data-theme="dark"] .theme-toggle[aria-pressed="true"]{
+ background:#293a31;border-color:#526b58;color:#dce7d9;box-shadow:none
+}
+html[data-theme="dark"] .button-ghost:hover{background:#35483b}
+html[data-theme="dark"] .theme-toggle[aria-pressed="true"]{background:#393247;border-color:#6f638a;color:#e7def3}
+html[data-theme="dark"] .menu-toggle{background:#293a31;border-color:#526b58;color:#e5e9df}
+html[data-theme="dark"] .hero h1 span{background:linear-gradient(90deg,#e3a2bd,#aaa0dc);-webkit-background-clip:text;background-clip:text}
+html[data-theme="dark"] .hero-art:before{background:linear-gradient(145deg,#648b6b,#9a6d91);opacity:.38}
+html[data-theme="dark"] .orbit{border-color:rgba(174,202,173,.24)}
+html[data-theme="dark"] .stage-card{background:linear-gradient(145deg,#344d3c,#49394b 66%,#303e39);border-color:rgba(218,229,207,.18);box-shadow:0 25px 70px rgba(0,0,0,.38),inset 0 1px rgba(245,247,224,.12)}
+html[data-theme="dark"] .stage-label,
+html[data-theme="dark"] .stage-caption{color:#d4dfd0}
+html[data-theme="dark"] .stage-heart,
+html[data-theme="dark"] .star,
+html[data-theme="dark"] .season-symbol,
+html[data-theme="dark"] .floating-chip{color:#e3a0bd}
+html[data-theme="dark"] .floating-chip{background:#35463b;border-color:rgba(198,220,195,.16)}
+html[data-theme="dark"] .floating-chip span{color:#d6e1d2}
+html[data-theme="dark"] .status-pill,
+html[data-theme="dark"] .count-pill,
+html[data-theme="dark"] .mini-label{background:#304739;color:#d4e6d0;border-color:#526b57}
+html[data-theme="dark"] .status-muted{background:#303a35;color:#b2beb3;border-color:#4b5b50}
+html[data-theme="dark"] .season-card,
+html[data-theme="dark"] .info-card,
+html[data-theme="dark"] .step-card,
+html[data-theme="dark"] .admin-tile,
+html[data-theme="dark"] .recap-item,
+html[data-theme="dark"] .admin-submission,
+html[data-theme="dark"] .account-submission,
+html[data-theme="dark"] .final-media-panel,
+html[data-theme="dark"] .vote-panel,
+html[data-theme="dark"] .results-panel{background:linear-gradient(145deg,#293b31,#25332e);border-color:rgba(190,213,190,.16);box-shadow:0 12px 30px rgba(0,0,0,.18);color:#e5e9df}
+html[data-theme="dark"] .season-main{background:radial-gradient(ellipse at 100% 0%,rgba(151,103,135,.18),transparent 55%),linear-gradient(145deg,#2e4435,#29352f)}
+html[data-theme="dark"] .info-purple{background:linear-gradient(145deg,#2c4034,#383247)}
+html[data-theme="dark"] .info-icon,
+html[data-theme="dark"] .empty-icon{background:#49394a;color:#e2a1bc}
+html[data-theme="dark"] .info-purple .info-icon{background:#413a52;color:#c7b8e6}
+html[data-theme="dark"] .info-footer,
+html[data-theme="dark"] .info-footer span{color:#b5a7d9}
+html[data-theme="dark"] .progress-label{color:#c0cec0}
+html[data-theme="dark"] .progress-track{background:#40594a}
+html[data-theme="dark"] .progress-track span{background:linear-gradient(90deg,#c17f9e,#9183c0)}
+html[data-theme="dark"] .empty-state{background:rgba(45,68,53,.58);border-color:rgba(178,205,176,.25);color:#dce6d8}
+html[data-theme="dark"] .admin-tile{background:#293b31;color:#e4e9df}
+html[data-theme="dark"] .admin-tile:hover{background:#354a3b;border-color:#718e70}
+html[data-theme="dark"] .admin-tile>span{color:#b6a6df}
+html[data-theme="dark"] .notice-box{background:#3d3b31;border-color:rgba(203,177,128,.3)}
+html[data-theme="dark"] .notice-box p{color:#e1d6bd}
+html[data-theme="dark"] .notice-box strong{color:#f0e5ce}
+html[data-theme="dark"] .modal{background:#25332d;color:#e5e9df;border-color:#52695a;box-shadow:0 30px 90px rgba(0,0,0,.55)}
+html[data-theme="dark"] .modal::backdrop{background:rgba(7,13,10,.78)}
+html[data-theme="dark"] .modal-heading{border-color:rgba(190,213,190,.16)}
+html[data-theme="dark"] .icon-button{background:#35483c;color:#e5e9df;border-color:#617768}
+html[data-theme="dark"] .modal label,
+html[data-theme="dark"] .admin-form label{color:#dce6d8}
+html[data-theme="dark"] .modal input,
+html[data-theme="dark"] .modal select,
+html[data-theme="dark"] .modal textarea,
+html[data-theme="dark"] .admin-form input:not([type=checkbox]),
+html[data-theme="dark"] .admin-form select,
+html[data-theme="dark"] .admin-form textarea,
+html[data-theme="dark"] .admin-submission textarea,
+html[data-theme="dark"] .admin-form-row select,
+html[data-theme="dark"] .country-picker-trigger,
+html[data-theme="dark"] .country-search,
+html[data-theme="dark"] .vote-row select,
+html[data-theme="dark"] .season-select-trigger{
+ background:#1d2b25!important;color:#e5e9df!important;border-color:#536b5a!important
+}
+html[data-theme="dark"] .modal input::placeholder,
+html[data-theme="dark"] .modal textarea::placeholder,
+html[data-theme="dark"] .admin-form input::placeholder,
+html[data-theme="dark"] .admin-form textarea::placeholder{color:#899c8c}
+html[data-theme="dark"] .modal input:focus,
+html[data-theme="dark"] .modal select:focus,
+html[data-theme="dark"] .modal textarea:focus,
+html[data-theme="dark"] .admin-form input:focus,
+html[data-theme="dark"] .admin-form select:focus,
+html[data-theme="dark"] .admin-form textarea:focus{border-color:#a99bd3;outline-color:rgba(169,155,211,.25)}
+html[data-theme="dark"] .form-message,
+html[data-theme="dark"] .admin-message,
+html[data-theme="dark"] .admin-review-feedback{color:#e0a4bd}
+html[data-theme="dark"] .toast{background:#dce8d9;color:#203027;border-color:rgba(255,255,255,.22);box-shadow:0 12px 35px rgba(0,0,0,.4)}
+html[data-theme="dark"] .country-picker-current-flag{color:#e3a0bd}
+html[data-theme="dark"] .country-picker-chevron{color:#b8c9b8}
+html[data-theme="dark"] .country-picker-panel,
+html[data-theme="dark"] .season-select-menu{background:#25352d;border-color:#536b5a;box-shadow:0 18px 45px rgba(0,0,0,.45)}
+html[data-theme="dark"] .country-picker-option,
+html[data-theme="dark"] .season-select-option{color:#e0e8dd}
+html[data-theme="dark"] .country-picker-option:hover,
+html[data-theme="dark"] .country-picker-option[aria-selected=true],
+html[data-theme="dark"] .season-select-option:hover{background:#3a4d3e}
+html[data-theme="dark"] .country-picker-empty{color:#b4c2b4}
+html[data-theme="dark"] .recap-portrait,
+html[data-theme="dark"] .vote-performer-photo,
+html[data-theme="dark"] .vote-participant-photo-box{background:#34483a;border-color:#617768}
+html[data-theme="dark"] .recap-item-details strong,
+html[data-theme="dark"] .vote-participant-info strong,
+html[data-theme="dark"] .admin-submission>strong{color:#e8ede4}
+html[data-theme="dark"] .recap-item-details span,
+html[data-theme="dark"] .recap-photo-missing,
+html[data-theme="dark"] .admin-applicant,
+html[data-theme="dark"] .account-content p{color:#adbdaf}
+html[data-theme="dark"] .admin-checks{background:#293b31;border-color:#536b5a}
+html[data-theme="dark"] .admin-checks label{color:#d9e4d7}
+html[data-theme="dark"] .admin-submission-status,
+html[data-theme="dark"] .account-rejection-comment{color:#e2a4bf}
+html[data-theme="dark"] .vote-notice{background:#493f32;border-color:#816b4c;color:#f0dfc2!important}
+html[data-theme="dark"] .vote-row{background:#2c4034;border-color:#4a6250}
+html[data-theme="dark"] .vote-row strong{color:#d5e1d3}
+html[data-theme="dark"] .vote-participants{background:#24342c;border-color:#4b6251}
+html[data-theme="dark"] .vote-participant{background:#304438;border-color:#526b58}
+html[data-theme="dark"] .vote-participant-info small{color:#b3c2b3}
+html[data-theme="dark"] .results-row{background:#304337;border-color:#4d6251}
+html[data-theme="dark"] .results-row strong,
+html[data-theme="dark"] .admin-results-rank{color:#c0b1e7}
+html[data-theme="dark"] .results-row span{color:#e0e8dd}
+html[data-theme="dark"] .results-row b,
+html[data-theme="dark"] .admin-results-total{color:#e1a2bd}
+html[data-theme="dark"] .final-media-panel{background:#293b31}
+html[data-theme="dark"] .twitch-player,
+html[data-theme="dark"] .final-recording{background:#111b16}
+html[data-theme="dark"] .season-logo{background:#293b31}
+html[data-theme="dark"] .season-deadlines{background:#2a3c31;border-color:#4c6552}
+html[data-theme="dark"] .season-deadlines>strong{color:#e5e9df}
+html[data-theme="dark"] .season-deadline-row span,
+html[data-theme="dark"] .season-deadline-row time{color:#c1cec1}
+html[data-theme="dark"] .admin-results-tab{background:#293b31;color:#bdc9bd;border-color:#52685a}
+html[data-theme="dark"] .admin-results-tab.is-active{background:#443c54;border-color:#83749f;color:#eee7f7}
+html[data-theme="dark"] .admin-results-stat,
+html[data-theme="dark"] .admin-results-table-wrap{background:#25352d;border-color:#52695a}
+html[data-theme="dark"] .admin-results-stat strong{color:#edf0e8}
+html[data-theme="dark"] .admin-results-table{color:#e0e8dd}
+html[data-theme="dark"] .admin-results-table th,
+html[data-theme="dark"] .admin-results-table td{border-color:rgba(190,213,190,.14)}
+html[data-theme="dark"] .admin-results-table thead th,
+html[data-theme="dark"] .admin-results-matrix-table th:first-child{background:#35483a;color:#e4ece1}
+html[data-theme="dark"] .admin-results-table tbody th{color:#dce6d8}
+html[data-theme="dark"] .admin-results-table td small{color:#aebcaf}
+html[data-theme="dark"] .admin-results-matrix-table td.has-points{color:#e1a2bd}
+html[data-theme="dark"] .admin-results-matrix-table td.no-points,
+html[data-theme="dark"] .admin-results-status-cell{color:#aab9ab}
+html[data-theme="dark"] .admin-jury-ballot{background:#293b31;border-color:#52695a}
+html[data-theme="dark"] .admin-jury-ballot-header>strong,
+html[data-theme="dark"] .admin-jury-award-target strong{color:#e5e9df}
+html[data-theme="dark"] .admin-jury-award-row{background:#34483a;border-color:#52695a}
+html[data-theme="dark"] .admin-jury-award-points{background:#514665;color:#eee7f7}
+html[data-theme="dark"] .admin-jury-award-arrow{color:#aebcaf}
+html[data-theme="dark"] .admin-jury-award-target small,
+html[data-theme="dark"] .admin-jury-ballot-empty{color:#b1c0b2}
+html[data-theme="dark"] .admin-jury-ballot-status.is-voted{color:#a9d4ae}
+html[data-theme="dark"] .admin-jury-ballot-status.is-auto,
+html[data-theme="dark"] .admin-jury-award-auto{color:#e3c18f}
+html[data-theme="dark"] .admin-jury-award-auto{border-color:rgba(227,193,143,.35)}
+html[data-theme="dark"] .recaps-section,
+html[data-theme="dark"] .admin-section,
+html[data-theme="dark"] .footer{border-color:rgba(190,213,190,.14)}
+html[data-theme="dark"] .country-native-select,
+html[data-theme="dark"] .season-select-native{color-scheme:dark}
+@media(prefers-reduced-motion:reduce){
+ html[data-theme="dark"] *,html[data-theme="dark"] *::before,html[data-theme="dark"] *::after{transition-duration:.01ms!important}
+}
