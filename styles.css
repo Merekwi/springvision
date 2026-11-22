@@ -362,15 +362,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 
-/* Theme switcher */
-.theme-toggle{white-space:nowrap;min-width:132px;padding-inline:12px;gap:8px}
-.theme-toggle-icon{font-size:16px;line-height:1}
-.theme-toggle-label{font-size:11px}
-.theme-toggle[aria-pressed="true"]{background:rgba(126,110,166,.2);border-color:rgba(126,110,166,.38);color:#51466f;box-shadow:none}
-@media(max-width:760px){
- .theme-toggle{justify-content:flex-start;width:100%;min-height:42px}
-}
-
 /* Dark theme: a complete, low-glare palette across public and admin surfaces. */
 html[data-theme="dark"]{
  color-scheme:dark;
@@ -601,3 +592,58 @@ html[data-theme="dark"] .season-select-native{color-scheme:dark}
 }
 
 html[data-theme="dark"] .hero h1 span{color:transparent}
+
+
+/* Persistent theme control: visible on desktop and on mobile outside the collapsed menu. */
+.theme-toggle{
+  min-width:132px;
+  padding-inline:12px;
+  gap:8px;
+  background:rgba(133,166,133,.28);
+  border:1px solid var(--line-strong);
+  color:#36513b;
+  box-shadow:none;
+}
+.theme-toggle:hover{background:rgba(132,165,133,.46);filter:none;box-shadow:none}
+.theme-toggle-icon{display:inline-grid;place-items:center;width:18px;height:18px;font-size:17px;line-height:1}
+.theme-toggle-label{font-size:11px}
+html[data-theme="dark"] .theme-toggle{
+  background:#293a31;
+  border-color:#526b58;
+  color:#dce7d9;
+  box-shadow:none;
+}
+html[data-theme="dark"] .theme-toggle:hover{background:#35483b}
+html[data-theme="dark"] .theme-toggle[aria-pressed="true"]{
+  background:#393247;
+  border-color:#6f638a;
+  color:#e7def3;
+}
+html[data-theme="dark"] .theme-toggle:focus-visible{
+  outline-color:#b8a8df;
+  box-shadow:0 0 0 3px rgba(184,168,223,.18);
+}
+body,.topbar,.season-card,.info-card,.step-card,.admin-tile,.modal,.vote-panel,.results-panel,
+.recap-item,.admin-submission,.account-submission,.final-media-panel,.admin-results-stat,
+.admin-results-table-wrap,.admin-jury-ballot,.admin-jury-award-row{
+  transition:background-color .2s ease,border-color .2s ease,color .2s ease,box-shadow .2s ease;
+}
+@media(max-width:760px){
+  .topbar{gap:10px}
+  .theme-toggle{
+    flex:0 0 43px;
+    width:43px;
+    min-width:43px;
+    height:43px;
+    min-height:43px;
+    padding:0;
+    justify-content:center;
+    border-radius:12px;
+  }
+  .theme-toggle-label{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  body,.topbar,.season-card,.info-card,.step-card,.admin-tile,.modal,.vote-panel,.results-panel,
+  .recap-item,.admin-submission,.account-submission,.final-media-panel,.admin-results-stat,
+  .admin-results-table-wrap,.admin-jury-ballot,.admin-jury-award-row{transition:none!important}
+}
