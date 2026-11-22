@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = (selector, root = document) => root.querySelector(selector);
-  const $ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const themeToggle = $('#themeToggle');
   const themeColorMeta = $('meta[name="theme-color"]');
   const applyTheme = (theme, persist = true) => {
@@ -10,12 +10,18 @@
     if (themeToggle) {
       themeToggle.setAttribute('aria-pressed', String(dark));
       themeToggle.setAttribute('aria-label', dark ? 'Включить весеннюю тему' : 'Включить тёмную тему');
+      themeToggle.setAttribute('title', dark ? 'Переключить на весеннюю тему' : 'Переключить на тёмную тему');
       const icon = $('.theme-toggle-icon', themeToggle);
       const label = $('.theme-toggle-label', themeToggle);
       if (icon) icon.textContent = dark ? '☀' : '☾';
       if (label) label.textContent = dark ? 'Весенняя тема' : 'Тёмная тема';
     }
     if (themeColorMeta) themeColorMeta.setAttribute('content', dark ? '#18251f' : '#a8c5aa');
+    const telegramApp = window.Telegram?.WebApp;
+    try {
+      telegramApp?.setHeaderColor?.(dark ? '#18251f' : '#a8c5aa');
+      telegramApp?.setBackgroundColor?.(dark ? '#18251f' : '#a8c5aa');
+    } catch (_) {}
     if (persist) {
       try { localStorage.setItem('springvision-theme', dark ? 'dark' : 'spring'); } catch (_) {}
     }
