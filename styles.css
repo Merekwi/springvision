@@ -599,3 +599,5 @@ html[data-theme="dark"] .season-select-native{color-scheme:dark}
 @media(prefers-reduced-motion:reduce){
  html[data-theme="dark"] *,html[data-theme="dark"] *::before,html[data-theme="dark"] *::after{transition-duration:.01ms!important}
 }
+
+html[data-theme="dark"] .hero h1 span{color:transparent}
