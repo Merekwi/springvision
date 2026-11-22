@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 180" role="img" aria-labelledby="title">
+<title id="title">SpringVision</title>
+<defs>
+ <linearGradient id="heart" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff7da9"/><stop offset=".48" stop-color="#e75c9f"/><stop offset=".72" stop-color="#9874d9"/><stop offset="1" stop-color="#6556b8"/></linearGradient>
+ <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/><feOffset dy="4"/><feComponentTransfer><feFuncA type="linear" slope=".22"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<g filter="url(#shadow)" fill="#fff" stroke="#d9d4d2" stroke-width="1.2" paint-order="stroke">
+ <text x="18" y="130" font-family="Brush Script MT, Segoe Script, cursive" font-size="126" font-style="italic" font-weight="700" letter-spacing="-7">Spring</text>
+ <text x="482" y="130" font-family="Brush Script MT, Segoe Script, cursive" font-size="126" font-style="italic" font-weight="700" letter-spacing="-7">Vision</text>
+</g>
+<path d="M390 53 C390 17 439 8 458 44 C478 7 529 18 529 56 C529 94 458 145 458 145 C458 145 390 94 390 53Z" fill="url(#heart)" stroke="#fff" stroke-width="9" stroke-linejoin="round"/>
+<path d="M397 65 C416 51 437 43 461 38 C482 34 500 37 516 48 C495 47 476 54 458 65 C438 77 420 89 404 100 C398 89 395 77 397 65Z" fill="#ff9ab8" opacity=".65"/>
+</svg>

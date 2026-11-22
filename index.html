@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111126">
+  <meta name="theme-color" content="#f7f5ef">
   <meta name="description" content="SpringVision — музыкальный конкурс в Telegram.">
   <title>SpringVision — музыкальный конкурс</title>
-  <link rel="stylesheet" href="styles.css?v=20261119-3">
+  <link rel="stylesheet" href="styles.css?v=20261122-spring">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="config.js?v=20261024-6"></script>
   <script src="api.js?v=20261024-6"></script>
-  <script defer src="app.js?v=20261120-1"></script>
+  <script defer src="app.js?v=20261122-spring"></script>
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#home" aria-label="SpringVision — главная"><span class="brand-mark">S<span>V</span></span><span>SpringVision<small>ЕВРОПЕЙСКИЙ МУЗЫКАЛЬНЫЙ КОНКУРС</small></span></a>
+      <a class="brand" href="#home" aria-label="SpringVision — главная"><img class="brand-logo" src="assets/brand/springvision-logo.svg" alt=""><span>SpringVision<small>МУЗЫКА БЕЗ ГРАНИЦ</small></span></a>
       <button class="menu-toggle" id="menuToggle" aria-label="Открыть меню">☰</button>
       <nav id="mainNav" aria-label="Главная навигация">
         <a href="#season">Сезон</a><a href="#recaps">Рекапы</a><a href="#rules">Правила</a>
@@ -72,7 +72,7 @@
       </section>
     </main>
 
-    <footer class="footer"><a class="brand footer-brand" href="#home"><span class="brand-mark">S<span>V</span></span><span>SpringVision<small>MUSIC WITHOUT BORDERS</small></span></a><span>Музыка объединяет страны.</span><a href="#home">Наверх ↑</a></footer>
+    <footer class="footer"><a class="brand footer-brand" href="#home"><img class="brand-logo" src="assets/brand/springvision-logo.svg" alt=""><span>SpringVision<small>МУЗЫКА БЕЗ ГРАНИЦ</small></span></a><span>Музыка объединяет страны.</span><a href="#home">Наверх ↑</a></footer>
   </div>
 
   <dialog id="applicationDialog" class="modal"><form id="applicationForm" method="dialog"><div class="modal-heading"><div><div class="eyebrow">УЧАСТИЕ В КОНКУРСЕ</div><h2>Заявка на сезон</h2></div><button class="icon-button" type="button" data-close="applicationDialog" aria-label="Закрыть">×</button></div><p class="modal-intro">Заполни данные участника и загрузи 30-секундный рекап. Заявка поступит организатору на модерацию.</p><label class="country-picker-label">Страна
