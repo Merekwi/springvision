@@ -743,3 +743,38 @@ html[data-theme="dark"] .toast{background:#dce8d9;color:#203027}
 html[data-theme="dark"] .button-ghost,html[data-theme="dark"] .menu-toggle,html[data-theme="dark"] .icon-button{background:#2c3b30;color:#e1e9df;border-color:var(--line-strong);box-shadow:none}
 html[data-theme="dark"] .button-ghost:hover,html[data-theme="dark"] .icon-button:hover{background:var(--surface-hover)}
 html[data-theme="dark"] .hero h1 span{color:transparent}
+
+
+/* Next-season country reservation */
+.account-reservation {
+  display: grid;
+  gap: .55rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-feature, #e3eadf);
+  color: var(--text, #304a36);
+}
+.account-reservation h3 {
+  margin: 0;
+  color: var(--text, #304a36);
+}
+.account-reservation p {
+  margin: 0;
+  color: var(--text-2, var(--muted, #526c57));
+  line-height: 1.55;
+}
+.account-reservation .reservation-action {
+  justify-self: start;
+  margin-top: .2rem;
+}
+.country-reservation-hint {
+  display: block;
+  margin-top: .5rem;
+  color: var(--text-2, #526c57);
+  line-height: 1.5;
+}
+.country-picker-trigger:disabled {
+  opacity: .88;
+  cursor: not-allowed;
+}
