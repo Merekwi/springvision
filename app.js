@@ -959,7 +959,7 @@
     const activeReservation = reservationState.reservation || null;
     currentCountryReservation = activeReservation && currentSeason?.id === activeReservation.target_season_id
       ? activeReservation
-      : currentCountryReservation;
+      : null;
     const reservationPanel = document.createElement('section');
     reservationPanel.className = 'account-reservation';
     const reservationHeading = document.createElement('h3');
