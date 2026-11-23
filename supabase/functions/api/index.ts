@@ -24,6 +24,15 @@ function toHex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+
+async function sha256Hex(value: string) {
+  return toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+}
+function randomToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function verifyTelegramInitData(initData: string, botToken: string) {
   const params = new URLSearchParams(initData);
   const receivedHash = params.get("hash");
@@ -69,6 +78,7 @@ async function sendTelegram(botToken: string, telegramId: number, text: string) 
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) throw new Error(data.description || "Telegram sendMessage failed");
 }
+
 
 async function runJuryCron(db: any, botToken: string) {
   const now = Date.now();
@@ -144,6 +154,40 @@ Deno.serve(async (request) => {
 
   const action = String(body.action || "");
   const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  if (action === "jury_photo_info" || action === "jury_photo_upload") {
+    const token=String(body.token||"");
+    if(!/^[a-f0-9]{64}$/.test(token)) return json({error:"Ссылка недействительна."},400);
+    const tokenHash=await sha256Hex(token);
+    const tokenResult=await db.from("springvision_photo_dispatch_tokens").select("season_id,juror_id,submission_id,country_code,expires_at,used_at").eq("token_hash",tokenHash).maybeSingle();
+    if(tokenResult.error||!tokenResult.data) return json({error:"Ссылка не найдена или недействительна."},404);
+    const ticket=tokenResult.data;
+    if(Date.parse(ticket.expires_at)<Date.now()) return json({error:"Срок действия ссылки истёк."},410);
+    if(ticket.used_at) return json({error:"Эта ссылка уже использована. Фото уже было отправлено."},410);
+    const submissionResult=await db.from("submissions").select("id,country_code,artist,song_title,performer_photo_storage_path").eq("id",ticket.submission_id).eq("season_id",ticket.season_id).maybeSingle();
+    if(submissionResult.error||!submissionResult.data) return json({error:"Заявка не найдена."},404);
+    const submission=submissionResult.data;
+    if(action==="jury_photo_info"){
+      let currentPhotoUrl=null;
+      if(submission.performer_photo_storage_path){const signed=await db.storage.from(BUCKET).createSignedUrl(submission.performer_photo_storage_path,1800);currentPhotoUrl=signed.data?.signedUrl||null;}
+      const seasonResult=await db.from("seasons").select("title").eq("id",ticket.season_id).maybeSingle();
+      return json({ok:true,countryCode:submission.country_code,artist:submission.artist,songTitle:submission.song_title,seasonTitle:seasonResult.data?.title||"SpringVision",currentPhotoUrl});
+    }
+    if(!form) return json({error:"Прикрепите изображение."},400);
+    const file=form.get("file");
+    if(!(file instanceof File)||!file.size||file.size>10*1024*1024) return json({error:"Изображение должно быть не пустым и не превышать 10 МБ."},400);
+    if(!["image/png","image/jpeg","image/webp"].includes(file.type)) return json({error:"Поддерживаются PNG, JPG и WebP."},400);
+    const ext=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";
+    const path=`performer-photos/${ticket.season_id}/${ticket.submission_id}/${crypto.randomUUID()}.${ext}`;
+    const uploaded=await db.storage.from(BUCKET).upload(path,file,{contentType:file.type,upsert:false});
+    if(uploaded.error) return json({error:"Не удалось загрузить фото: "+uploaded.error.message},500);
+    const updated=await db.from("submissions").update({performer_photo_storage_path:path}).eq("id",ticket.submission_id).eq("season_id",ticket.season_id).select("id").single();
+    if(updated.error) return json({error:"Фото загружено, но не удалось привязать его к заявке: "+updated.error.message},500);
+    await db.from("springvision_photo_dispatch_tokens").update({used_at:new Date().toISOString()}).eq("token_hash",tokenHash);
+    return json({ok:true,message:"Фото представителя успешно сохранено."});
+  }
+
+
   if (action === "cron_jury_reminders") {
     const cronSecret = Deno.env.get("SPRINGVISION_CRON_SECRET") || "";
     const supplied = request.headers.get("x-cron-secret") || "";
@@ -184,6 +228,14 @@ Deno.serve(async (request) => {
   const writeAudit = async (name: string, entityType: string, entityId?: string, details: Record<string, unknown> = {}) => {
     await db.from("audit_log").insert({ actor_id: profile.id, action: name, entity_type: entityType, entity_id: entityId || null, details });
   };
+  const expireCountryReservations = async () => {
+    const now = new Date().toISOString();
+    const result = await db.from("season_country_reservations")
+      .update({ status: "expired", updated_at: now })
+      .eq("status", "reserved")
+      .lte("expires_at", now);
+    if (result.error) throw new Error("Не удалось обновить сроки резерваций: " + result.error.message);
+  };
   const seasonById = async (id: string) => {
     const result = await db.from("seasons").select("*").eq("id", id).maybeSingle();
     if (result.error || !result.data) throw new Error("Сезон не найден.");
@@ -201,14 +253,78 @@ Deno.serve(async (request) => {
 
   try {
     switch (action) {
+
+      case "admin_photo_dispatch_status": {
+        requireAdmin();
+        const seasonResult=await db.from("seasons").select("id,season_number,title").eq("season_number",5).maybeSingle();
+        if(seasonResult.error||!seasonResult.data) throw new Error("Сезон №5 не найден.");
+        const juryResult=await db.from("season_jury").select("user_id").eq("season_id",seasonResult.data.id).is("revoked_at",null);
+        if(juryResult.error) throw new Error(juryResult.error.message);
+        const tokensResult=await db.from("springvision_photo_dispatch_tokens").select("juror_id,sent_at").eq("season_id",seasonResult.data.id);
+        if(tokensResult.error) throw new Error(tokensResult.error.message);
+        const sent=(tokensResult.data||[]).filter(x=>x.sent_at).length;
+        return json({seasonTitle:seasonResult.data.title,total:(juryResult.data||[]).length,sent,complete:sent>0&&sent>=(juryResult.data||[]).length});
+      }
+      case "admin_send_jury_photo_requests": {
+        requireAdmin();
+        const seasonResult=await db.from("seasons").select("id,title").eq("season_number",5).maybeSingle();
+        if(seasonResult.error||!seasonResult.data) throw new Error("Сезон №5 не найден.");
+        const season=seasonResult.data;
+        const juryResult=await db.from("season_jury").select("user_id,submission_id").eq("season_id",season.id).is("revoked_at",null);
+        if(juryResult.error) throw new Error("Не удалось получить жюри: "+juryResult.error.message);
+        const rows=juryResult.data||[];
+        if(!rows.length) throw new Error("В сезоне нет действующих назначений жюри.");
+        let sent=0,failed=0;
+        for(const juror of rows){
+          const existing=await db.from("springvision_photo_dispatch_tokens").select("token_hash,sent_at").eq("season_id",season.id).eq("juror_id",juror.user_id).maybeSingle();
+          if(existing.error) throw new Error(existing.error.message);
+          if(existing.data?.sent_at){sent++;continue;}
+          const [profileResult,submissionResult]=await Promise.all([
+            db.from("profiles").select("telegram_id").eq("id",juror.user_id).maybeSingle(),
+            juror.submission_id
+              ? db.from("submissions").select("id,country_code,artist,song_title").eq("id",juror.submission_id).eq("season_id",season.id).maybeSingle()
+              : db.from("submissions").select("id,country_code,artist,song_title").eq("user_id",juror.user_id).eq("season_id",season.id).eq("status","approved").maybeSingle()
+          ]);
+          const telegramId=Number(profileResult.data?.telegram_id||0), submission=submissionResult.data;
+          if(!telegramId||!submission){failed++;continue;}
+          const token=randomToken(),tokenHash=await sha256Hex(token),expiresAt=new Date(Date.now()+14*86400000).toISOString();
+          const saved=await db.from("springvision_photo_dispatch_tokens").upsert({
+            token_hash:tokenHash,season_id:season.id,juror_id:juror.user_id,submission_id:submission.id,
+            telegram_id:telegramId,country_code:submission.country_code,expires_at:expiresAt,used_at:null,sent_at:null,send_error:null
+          },{onConflict:"season_id,juror_id"});
+          if(saved.error){failed++;continue;}
+          const link="https://merekwi.github.io/springvision/photo-upload.html?token="+token;
+          const message=`Здравствуйте! Это команда SpringVision.
+
+Приносим извинения: из-за технической ошибки фотография представителя могла не сохраниться или потеряться. Мы восстанавливаем фотографии для сезона «${season.title}».
+
+Пожалуйста, откройте вашу персональную ссылку и загрузите фото заново. Даже если вы уже загружали фотографию и она отображается в приложении, просим подтвердить её повторной загрузкой, чтобы у нас точно сохранилась актуальная версия.
+
+${link}
+
+Ссылка действует 14 дней и предназначена только для вашей заявки. Спасибо за понимание!`;
+          try{
+            await sendTelegram(botToken,telegramId,message);
+            await db.from("springvision_photo_dispatch_tokens").update({sent_at:new Date().toISOString(),send_error:null}).eq("token_hash",tokenHash);
+            sent++;
+          }catch(error){
+            await db.from("springvision_photo_dispatch_tokens").update({send_error:error instanceof Error?error.message:"Telegram delivery failed"}).eq("token_hash",tokenHash);
+            failed++;
+          }
+        }
+        await writeAudit("jury_photo_recovery_dispatch","season",season.id,{sent,failed,total:rows.length});
+        return json({ok:true,sent,failed,total:rows.length,complete:sent===rows.length});
+      }
+
       case "me":
         return json({ profile, isAdmin });
 
       case "public_state": {
+        await expireCountryReservations();
         const seasonResult = await db.from("seasons").select("*").not("status", "eq", "archived").order("season_number", { ascending: false }).limit(1).maybeSingle();
         if (seasonResult.error) throw new Error(seasonResult.error.message);
         const season = seasonResult.data;
-        if (!season) return json({ profile, isAdmin, season: null, submissions: [], countries: [], reservedCountryCodes: [], ownSubmissionId: null, juryResults: null, televoteResults: null, overallResults: null });
+        if (!season) return json({ profile, isAdmin, season: null, submissions: [], countries: [], reservedCountryCodes: [], ownSubmissionId: null, juryResults: null, televoteResults: null, overallResults: null, countryReservation: null });
         const juryRole = await db.from("season_jury").select("user_id,submission_id").eq("season_id", season.id).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
         // An open televote must always expose the approved ballot options to voters.
         const canSeeParticipants = isAdmin || season.participant_list_published || Boolean(juryRole.data) || (season.status === "televoting" && season.televote_open);
@@ -268,9 +384,28 @@ Deno.serve(async (request) => {
           [...jury, ...televote].forEach((row: { submission_id: string; points: number }) => sum.set(String(row.submission_id), (sum.get(String(row.submission_id)) || 0) + row.points));
           overallResults = [...sum.entries()].map(([submission_id, points]) => ({ submission_id, points })).sort((a,b) => b.points - a.points);
         }
-        const reservedResult = await db.from("submissions").select("country_code").eq("season_id", season.id).in("status", ["pending","approved"]);
-        if (reservedResult.error) throw new Error(reservedResult.error.message);
-        const reservedCountryCodes = [...new Set((reservedResult.data || []).map(row => row.country_code))];
+        const [reservedResult, reservationHoldsResult] = await Promise.all([
+          db.from("submissions").select("country_code").eq("season_id", season.id).in("status", ["pending","approved"]),
+          db.from("season_country_reservations").select("user_id,country_code,source_season_id,expires_at")
+            .eq("target_season_id", season.id).eq("status", "reserved")
+        ]);
+        if (reservedResult.error || reservationHoldsResult.error) throw new Error("Не удалось загрузить занятые страны.");
+        const reservedCountrySet = new Set((reservedResult.data || []).map(row => row.country_code));
+        let countryReservation: any = null;
+        for (const hold of reservationHoldsResult.data || []) {
+          if (hold.user_id === profile.id) {
+            countryReservation = {
+              country_code: hold.country_code,
+              source_season_id: hold.source_season_id,
+              target_season_id: season.id,
+              expires_at: hold.expires_at,
+              status: "reserved"
+            };
+          } else {
+            reservedCountrySet.add(hold.country_code);
+          }
+        }
+        const reservedCountryCodes = [...reservedCountrySet];
         const countriesResult = await db.from("countries").select("code,name,flag_path").eq("enabled", true).order("name");
         if (countriesResult.error) throw new Error(countriesResult.error.message);
         if (season.recording_published && season.recording_storage_path) {
@@ -291,7 +426,7 @@ Deno.serve(async (request) => {
           // Reacquire recap URLs only when clicked; photo previews receive short-lived signed links.
           return { ...safeRow, recap_url: null, performer_photo_url };
         }));
-        return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, ownSubmissionId, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
+        return json({ profile, isAdmin, season: publicSeason, submissions: submissionsWithUrls, countries: countriesResult.data || [], reservedCountryCodes, countryReservation, ownSubmissionId, juryResults, televoteResults, overallResults, juryEligible: Boolean(juryRole.data) });
       }
 
       case "submit_application": {
@@ -316,8 +451,30 @@ Deno.serve(async (request) => {
             now < Date.parse(season.registration_opens_at) || now > Date.parse(season.registration_closes_at)) {
           throw new Error("Регистрация сейчас закрыта.");
         }
-        const country = await db.from("countries").select("code").eq("code", countryCode).eq("enabled", true).maybeSingle();
+        await expireCountryReservations();
+        const [country, userReservationResult, countryHoldResult] = await Promise.all([
+          db.from("countries").select("code").eq("code", countryCode).eq("enabled", true).maybeSingle(),
+          db.from("season_country_reservations").select("id,country_code,target_season_id,expires_at")
+            .eq("user_id", profile.id).eq("status", "reserved").maybeSingle(),
+          db.from("season_country_reservations").select("user_id,target_season_id")
+            .eq("country_code", countryCode).eq("status", "reserved").maybeSingle()
+        ]);
         if (!country.data) throw new Error("Страна не найдена или недоступна.");
+        if (userReservationResult.error || countryHoldResult.error) throw new Error("Не удалось проверить резервацию страны.");
+        const userReservation = userReservationResult.data || null;
+        if (userReservation && userReservation.target_season_id !== seasonId) {
+          throw new Error("У вас есть резервация страны для другого сезона. Сначала используйте её или дождитесь освобождения.");
+        }
+        if (userReservation && userReservation.country_code !== countryCode) {
+          throw new Error("Вы зарезервировали другую страну. Заявку нужно отправить именно с ней.");
+        }
+        if (userReservation?.expires_at && now >= Date.parse(userReservation.expires_at)) {
+          throw new Error("Срок резервации истёк: заявку нужно было отправить не позднее чем за 24 часа до окончания регистрации.");
+        }
+        if (countryHoldResult.data &&
+            (countryHoldResult.data.user_id !== profile.id || countryHoldResult.data.target_season_id !== seasonId)) {
+          throw new Error("Эта страна зарезервирована другим участником.");
+        }
         const path = `recaps/${seasonId}/${crypto.randomUUID()}-${recap.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80)}`;
         const photoPath = `performer-photos/${seasonId}/${crypto.randomUUID()}.${photoExtension}`;
         await uploadFile(recap, path);
@@ -335,8 +492,196 @@ Deno.serve(async (request) => {
           if (result.error.code === "23505") throw new Error("Эта страна или ваш аккаунт уже заняты заявкой в текущем сезоне.");
           throw new Error("Не удалось сохранить заявку: " + result.error.message);
         }
-        await writeAudit("submission_created", "submission", result.data.id, { season_id: seasonId, country_code: countryCode });
+        if (userReservation) {
+          const fulfilled = await db.from("season_country_reservations")
+            .update({ status: "submitted", submission_id: result.data.id, updated_at: new Date().toISOString() })
+            .eq("id", userReservation.id).eq("status", "reserved");
+          if (fulfilled.error) console.error("Application saved but reservation could not be marked fulfilled:", fulfilled.error);
+        }
+        await writeAudit("submission_created", "submission", result.data.id, { season_id: seasonId, country_code: countryCode, used_country_reservation: Boolean(userReservation) });
         return json({ ok: true, submission: result.data, message: "Заявка отправлена на модерацию." });
+      }
+
+      case "my_country_reservations": {
+        await expireCountryReservations();
+
+        const activeResult = await db.from("season_country_reservations")
+          .select("id,source_season_id,target_season_id,country_code,status,expires_at,submission_id,created_at")
+          .eq("user_id", profile.id).eq("status", "reserved").maybeSingle();
+        if (activeResult.error) throw new Error(activeResult.error.message);
+
+        let reservation: any = activeResult.data || null;
+        if (reservation) {
+          const [sourceResult, targetResult, countryResult] = await Promise.all([
+            db.from("seasons").select("id,season_number,title,status").eq("id", reservation.source_season_id).maybeSingle(),
+            reservation.target_season_id
+              ? db.from("seasons").select("id,season_number,title,status,registration_closes_at").eq("id", reservation.target_season_id).maybeSingle()
+              : Promise.resolve({ data: null, error: null }),
+            db.from("countries").select("name").eq("code", reservation.country_code).maybeSingle()
+          ]);
+          if (sourceResult.error || targetResult.error || countryResult.error) throw new Error("Не удалось загрузить сведения о резервации.");
+          reservation = {
+            ...reservation,
+            country_name: countryResult.data?.name || reservation.country_code.toUpperCase(),
+            sourceSeason: sourceResult.data || null,
+            targetSeason: targetResult.data || null
+          };
+        }
+
+        const finishedResult = await db.from("seasons")
+          .select("id,season_number,title").eq("status", "finished")
+          .order("season_number", { ascending: false });
+        if (finishedResult.error) throw new Error(finishedResult.error.message);
+
+        let eligibleSeason: any = null;
+        const finishedSeasons = finishedResult.data || [];
+        if (finishedSeasons.length) {
+          const juryResult = await db.from("season_jury")
+            .select("season_id,submission_id").eq("user_id", profile.id)
+            .is("revoked_at", null).in("season_id", finishedSeasons.map((row: any) => row.id));
+          if (juryResult.error) throw new Error("Не удалось проверить участие в жюри: " + juryResult.error.message);
+
+          const membership = (juryResult.data || []).sort((a: any, b: any) =>
+            (finishedSeasons.find((s: any) => s.id === b.season_id)?.season_number || 0) -
+            (finishedSeasons.find((s: any) => s.id === a.season_id)?.season_number || 0)
+          )[0];
+
+          if (membership) {
+            const source = finishedSeasons.find((row: any) => row.id === membership.season_id);
+            let entrantResult = membership.submission_id
+              ? await db.from("submissions").select("id,user_id,country_code")
+                  .eq("id", membership.submission_id).eq("season_id", membership.season_id).maybeSingle()
+              : await db.from("submissions").select("id,user_id,country_code")
+                  .eq("season_id", membership.season_id).eq("user_id", profile.id).eq("status", "approved").maybeSingle();
+            if (entrantResult.error) throw new Error("Не удалось определить страну участника жюри.");
+            const entrant = entrantResult.data;
+            if (source && entrant && entrant.user_id === profile.id) {
+              const [countryResult, existingResult, targetResult] = await Promise.all([
+                db.from("countries").select("name").eq("code", entrant.country_code).maybeSingle(),
+                db.from("season_country_reservations").select("id,status,target_season_id,expires_at,submission_id")
+                  .eq("source_season_id", source.id).eq("user_id", profile.id).maybeSingle(),
+                db.from("seasons").select("id,season_number,title,status,registration_closes_at")
+                  .gt("season_number", source.season_number).order("season_number", { ascending: true }).limit(1).maybeSingle()
+              ]);
+              if (countryResult.error || existingResult.error || targetResult.error) throw new Error("Не удалось подготовить право резервации.");
+              const targetSeason = targetResult.data || null;
+              let blockedReason = "";
+              if (reservation) blockedReason = "У вас уже есть действующая резервация.";
+              else if (existingResult.data?.status === "submitted") blockedReason = "Вы уже использовали это право, отправив заявку.";
+              else if (existingResult.data) blockedReason = "Право резервации для этого завершённого сезона уже использовано.";
+              else if (targetSeason && !["draft", "registration"].includes(targetSeason.status)) blockedReason = "Регистрация следующего сезона уже завершена.";
+              else if (targetSeason?.registration_closes_at &&
+                Date.now() >= Date.parse(targetSeason.registration_closes_at) - 24 * 60 * 60 * 1000) {
+                blockedReason = "До окончания регистрации осталось менее 24 часов. Резервация уже закрыта.";
+              }
+
+              if (!blockedReason && targetSeason) {
+                const [takenResult, heldResult] = await Promise.all([
+                  db.from("submissions").select("id").eq("season_id", targetSeason.id)
+                    .eq("country_code", entrant.country_code).in("status", ["pending", "approved"]).maybeSingle(),
+                  db.from("season_country_reservations").select("id,user_id").eq("country_code", entrant.country_code)
+                    .eq("status", "reserved").maybeSingle()
+                ]);
+                if (takenResult.error || heldResult.error) throw new Error("Не удалось проверить доступность страны.");
+                if (takenResult.data) blockedReason = "Эта страна уже занята заявкой в следующем сезоне.";
+                else if (heldResult.data && heldResult.data.user_id !== profile.id) blockedReason = "Эта страна уже зарезервирована другим участником.";
+              } else if (!blockedReason) {
+                const heldResult = await db.from("season_country_reservations").select("id,user_id")
+                  .eq("country_code", entrant.country_code).eq("status", "reserved").maybeSingle();
+                if (heldResult.error) throw new Error(heldResult.error.message);
+                if (heldResult.data && heldResult.data.user_id !== profile.id) blockedReason = "Эта страна уже зарезервирована другим участником.";
+              }
+
+              eligibleSeason = {
+                id: source.id,
+                season_number: source.season_number,
+                title: source.title,
+                country_code: entrant.country_code,
+                country_name: countryResult.data?.name || entrant.country_code.toUpperCase(),
+                targetSeason,
+                existingReservation: existingResult.data || null,
+                canReserve: !blockedReason,
+                blockedReason
+              };
+            }
+          }
+        }
+        return json({ reservation, eligibleSeason });
+      }
+
+      case "reserve_country": {
+        await expireCountryReservations();
+        const sourceSeasonId = String(body.sourceSeasonId || "");
+        if (!sourceSeasonId) throw new Error("Не указан завершённый сезон.");
+
+        const source = await seasonById(sourceSeasonId);
+        if (source.status !== "finished") throw new Error("Резервация доступна только после завершения сезона.");
+
+        const juryResult = await db.from("season_jury").select("submission_id")
+          .eq("season_id", sourceSeasonId).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
+        if (juryResult.error || !juryResult.data) throw new Error("Вы не состояли в жюри этого завершённого сезона.");
+
+        const entrantResult = juryResult.data.submission_id
+          ? await db.from("submissions").select("id,user_id,country_code")
+              .eq("id", juryResult.data.submission_id).eq("season_id", sourceSeasonId).maybeSingle()
+          : await db.from("submissions").select("id,user_id,country_code")
+              .eq("season_id", sourceSeasonId).eq("user_id", profile.id).eq("status", "approved").maybeSingle();
+        if (entrantResult.error || !entrantResult.data || entrantResult.data.user_id !== profile.id) {
+          throw new Error("Не удалось подтвердить вашу страну в завершённом сезоне.");
+        }
+        const countryCode = entrantResult.data.country_code;
+
+        const [activeResult, existingResult, targetResult] = await Promise.all([
+          db.from("season_country_reservations").select("id").eq("user_id", profile.id).eq("status", "reserved").maybeSingle(),
+          db.from("season_country_reservations").select("id,status").eq("source_season_id", sourceSeasonId)
+            .eq("user_id", profile.id).maybeSingle(),
+          db.from("seasons").select("id,season_number,title,status,registration_closes_at")
+            .gt("season_number", source.season_number).order("season_number", { ascending: true }).limit(1).maybeSingle()
+        ]);
+        if (activeResult.error || existingResult.error || targetResult.error) throw new Error("Не удалось проверить доступность резервации.");
+        if (activeResult.data) throw new Error("У вас уже есть действующая резервация страны.");
+        if (existingResult.data) throw new Error("Право резервации для этого завершённого сезона уже использовано.");
+
+        const targetSeason = targetResult.data || null;
+        if (targetSeason && !["draft", "registration"].includes(targetSeason.status)) {
+          throw new Error("Регистрация следующего сезона уже завершена.");
+        }
+        let expiresAt: string | null = null;
+        if (targetSeason?.registration_closes_at) {
+          const cutoff = Date.parse(targetSeason.registration_closes_at) - 24 * 60 * 60 * 1000;
+          if (Date.now() >= cutoff) throw new Error("До окончания регистрации осталось менее 24 часов. Зарезервировать страну уже нельзя.");
+          expiresAt = new Date(cutoff).toISOString();
+        }
+
+        if (targetSeason) {
+          const takenResult = await db.from("submissions").select("id").eq("season_id", targetSeason.id)
+            .eq("country_code", countryCode).in("status", ["pending", "approved"]).maybeSingle();
+          if (takenResult.error) throw new Error(takenResult.error.message);
+          if (takenResult.data) throw new Error("Эта страна уже занята заявкой в следующем сезоне.");
+        }
+        const heldResult = await db.from("season_country_reservations").select("id,user_id")
+          .eq("country_code", countryCode).eq("status", "reserved").maybeSingle();
+        if (heldResult.error) throw new Error(heldResult.error.message);
+        if (heldResult.data) throw new Error("Эта страна уже зарезервирована другим участником.");
+
+        const inserted = await db.from("season_country_reservations").insert({
+          source_season_id: sourceSeasonId,
+          target_season_id: targetSeason?.id || null,
+          user_id: profile.id,
+          country_code: countryCode,
+          status: "reserved",
+          expires_at: expiresAt
+        }).select("id,source_season_id,target_season_id,user_id,country_code,status,expires_at,created_at").single();
+        if (inserted.error) {
+          if (inserted.error.code === "23505") throw new Error("Эта страна или ваше право уже зарезервированы.");
+          throw new Error("Не удалось сохранить резервацию: " + inserted.error.message);
+        }
+        await writeAudit("country_reservation_created", "country_reservation", inserted.data.id, {
+          source_season_id: sourceSeasonId,
+          target_season_id: targetSeason?.id || null,
+          country_code: countryCode
+        });
+        return json({ ok: true, reservation: inserted.data, targetSeason });
       }
 
       case "my_submissions": {
@@ -925,15 +1270,12 @@ Deno.serve(async (request) => {
         const targets = await db.from("submissions").select("id,user_id,status").eq("season_id",seasonId).in("id",votes.map(v=>v.submissionId)).eq("status","approved");
         if (targets.error || targets.data?.length !== 10) throw new Error("В голосовании есть участник, которого нет в утверждённом списке.");
         const ownSubmissionId = jury.data.submission_id || own.data?.id || null;
-        const twelvePointVote = votes.find(v => v.points === 12);
-        if (twelvePointVote) {
-          const twelvePointTarget = (targets.data || []).find((row: any) => String(row.id) === String(twelvePointVote.submissionId));
-          if (ownSubmissionId && String(twelvePointTarget?.id) === String(ownSubmissionId)) {
-            throw new Error("Нельзя поставить 12 баллов собственной стране.");
-          }
-          if (twelvePointTarget && String(twelvePointTarget.user_id) === String(profile.id)) {
-            throw new Error("Нельзя поставить 12 баллов собственной стране.");
-          }
+        const ownTarget = (targets.data || []).find((row: any) =>
+          String(row.id) === String(ownSubmissionId) ||
+          String(row.user_id) === String(profile.id)
+        );
+        if (ownTarget) {
+          throw new Error("Жюри не может голосовать за собственную страну ни одним баллом.");
         }
         await db.from("jury_votes").delete().eq("season_id",seasonId).eq("juror_id",profile.id).eq("is_random_fallback",false);
         const saved = await db.from("jury_votes").insert(votes.map(v=>({season_id:seasonId,juror_id:profile.id,target_submission_id:v.submissionId,points:v.points})));
