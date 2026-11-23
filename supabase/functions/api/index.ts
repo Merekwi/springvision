@@ -536,16 +536,13 @@ ${link}
         let eligibleSeason: any = null;
         const finishedSeasons = finishedResult.data || [];
         if (finishedSeasons.length) {
+          const latestFinishedSeason = finishedSeasons[0];
           const juryResult = await db.from("season_jury")
             .select("season_id,submission_id").eq("user_id", profile.id)
-            .is("revoked_at", null).in("season_id", finishedSeasons.map((row: any) => row.id));
+            .eq("season_id", latestFinishedSeason.id).is("revoked_at", null).maybeSingle();
           if (juryResult.error) throw new Error("Не удалось проверить участие в жюри: " + juryResult.error.message);
 
-          const membership = (juryResult.data || []).sort((a: any, b: any) =>
-            (finishedSeasons.find((s: any) => s.id === b.season_id)?.season_number || 0) -
-            (finishedSeasons.find((s: any) => s.id === a.season_id)?.season_number || 0)
-          )[0];
-
+          const membership = juryResult.data || null;
           if (membership) {
             const source = finishedSeasons.find((row: any) => row.id === membership.season_id);
             let entrantResult = membership.submission_id
@@ -616,6 +613,12 @@ ${link}
 
         const source = await seasonById(sourceSeasonId);
         if (source.status !== "finished") throw new Error("Резервация доступна только после завершения сезона.");
+        const latestFinishedResult = await db.from("seasons").select("id")
+          .eq("status", "finished").order("season_number", { ascending: false }).limit(1).maybeSingle();
+        if (latestFinishedResult.error) throw new Error("Не удалось проверить последний завершённый сезон.");
+        if (!latestFinishedResult.data || latestFinishedResult.data.id !== sourceSeasonId) {
+          throw new Error("Право резервации действует только для последнего завершённого сезона.");
+        }
 
         const juryResult = await db.from("season_jury").select("submission_id")
           .eq("season_id", sourceSeasonId).eq("user_id", profile.id).is("revoked_at", null).maybeSingle();
