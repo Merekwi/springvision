@@ -36,6 +36,7 @@
   let currentProfile = null;
   let currentIsAdmin = false;
   let reservedCountryCodes = new Set();
+  let currentCountryReservation = null;
   let stateLoading = false;
   let lastStateLoadedAt = 0;
   const POINTS = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -148,14 +149,37 @@
   const openDialog = (id) => { const dialog = document.getElementById(id); if (dialog && !dialog.open) dialog.showModal(); };
   $$('[data-close]').forEach(button => button.addEventListener('click', () => document.getElementById(button.dataset.close)?.close()));
   $('#accountButton').addEventListener('click', () => { openDialog('accountDialog'); loadAccount().catch(error => { $('#accountContent').textContent = error.message || 'Не удалось загрузить профиль.'; }); });
-  $('#applyButton').addEventListener('click', () => {
+  const formatMoscowDateTime = (value) => value
+    ? new Date(value).toLocaleString('ru-RU', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow' })
+    : '';
+  const openApplicationDialog = () => {
     $('#applicationMessage').textContent = '';
     $('#applicationForm').reset();
+    countrySelect.disabled = false;
+    countryPickerTrigger.disabled = false;
+    const hint = $('#countryReservationHint');
+    hint.hidden = true;
+    hint.textContent = '';
     countryPickerCurrentName.textContent = 'Выбери страну';
     countryPickerCurrentFlag.textContent = '♡';
     renderCountryOptions();
+
+    const reservation = currentCountryReservation;
+    if (reservation && currentSeason?.id === reservation.target_season_id && reservation.status === 'reserved') {
+      const country = sortedCountries.find(item => item.code === reservation.country_code);
+      if (country) {
+        setCountry(country);
+        countrySelect.disabled = true;
+        countryPickerTrigger.disabled = true;
+        hint.textContent = reservation.expires_at
+          ? `Страна зарезервирована за вами. Отправьте полную заявку не позднее ${formatMoscowDateTime(reservation.expires_at)} (МСК), иначе резервация освободится.`
+          : 'Страна зарезервирована за вами. Крайний срок отправки заявки появится после установки даты окончания регистрации.';
+        hint.hidden = false;
+      }
+    }
     openDialog('applicationDialog');
-  });
+  };
+  $('#applyButton').addEventListener('click', openApplicationDialog);
   $('#menuToggle').addEventListener('click', () => $('#mainNav').classList.toggle('nav-open'));
   $$('#mainNav a').forEach(link => link.addEventListener('click', () => $('#mainNav').classList.remove('nav-open')));
   const adminContent = () => $('#adminDialogContent');
@@ -911,11 +935,12 @@
     const content = $('#accountContent');
     content.replaceChildren();
     const loading = document.createElement('p');
-    loading.textContent = 'Загружаем профиль и заявки…';
+    loading.textContent = 'Загружаем профиль, заявки и резервации…';
     content.append(loading);
-    const [me, mine] = await Promise.all([
+    const [me, mine, reservationState] = await Promise.all([
       window.SpringVisionAPI.request('me'),
-      window.SpringVisionAPI.request('my_submissions')
+      window.SpringVisionAPI.request('my_submissions'),
+      window.SpringVisionAPI.request('my_country_reservations')
     ]);
     content.replaceChildren();
     const profile = me.profile || {};
@@ -930,6 +955,90 @@
       admin.textContent = 'Доступ администратора';
       content.append(admin);
     }
+
+    const activeReservation = reservationState.reservation || null;
+    currentCountryReservation = activeReservation && currentSeason?.id === activeReservation.target_season_id
+      ? activeReservation
+      : currentCountryReservation;
+    const reservationPanel = document.createElement('section');
+    reservationPanel.className = 'account-reservation';
+    const reservationHeading = document.createElement('h3');
+    reservationHeading.textContent = 'Резервация страны на следующий сезон';
+    reservationPanel.append(reservationHeading);
+
+    if (activeReservation) {
+      const countryLabel = activeReservation.country_name || sortedCountries.find(c => c.code === activeReservation.country_code)?.name || activeReservation.country_code.toUpperCase();
+      const summary = document.createElement('p');
+      if (activeReservation.targetSeason) {
+        summary.textContent = `Вы зарезервировали ${countryLabel} для SpringVision #${String(activeReservation.targetSeason.season_number).padStart(2,'0')}.`;
+      } else {
+        summary.textContent = `Вы зарезервировали ${countryLabel}. Резервация автоматически перейдёт на следующий сезон после его создания.`;
+      }
+      reservationPanel.append(summary);
+      if (activeReservation.expires_at) {
+        const deadline = document.createElement('p');
+        deadline.textContent = `Заявку с песней необходимо отправить до ${formatMoscowDateTime(activeReservation.expires_at)} (МСК). После этого срока страна освободится.`;
+        reservationPanel.append(deadline);
+      } else if (activeReservation.targetSeason) {
+        const note = document.createElement('p');
+        note.textContent = 'Крайний срок будет установлен автоматически, когда организатор задаст дату окончания регистрации.';
+        reservationPanel.append(note);
+      }
+      if (activeReservation.targetSeason && currentSeason?.id === activeReservation.target_season_id && currentSeason.status === 'registration') {
+        const applyReserved = document.createElement('button');
+        applyReserved.type = 'button';
+        applyReserved.className = 'button button-small reservation-action';
+        applyReserved.textContent = 'Подать заявку с этой страной →';
+        applyReserved.addEventListener('click', () => {
+          $('#accountDialog').close();
+          openApplicationDialog();
+        });
+        reservationPanel.append(applyReserved);
+      }
+    } else if (reservationState.eligibleSeason) {
+      const eligible = reservationState.eligibleSeason;
+      const summary = document.createElement('p');
+      summary.textContent = `Вы состояли в жюри завершённого сезона #${String(eligible.season_number).padStart(2,'0')} и можете зарезервировать ${eligible.country_name} для следующего сезона.`;
+      reservationPanel.append(summary);
+      if (eligible.targetSeason) {
+        const target = document.createElement('p');
+        target.textContent = `Следующий сезон: #${String(eligible.targetSeason.season_number).padStart(2,'0')} — ${eligible.targetSeason.title}.`;
+        reservationPanel.append(target);
+      }
+      if (eligible.canReserve) {
+        const reserveButton = document.createElement('button');
+        reserveButton.type = 'button';
+        reserveButton.className = 'button button-small reservation-action';
+        reserveButton.textContent = 'Зарезервировать страну';
+        reserveButton.addEventListener('click', async () => {
+          reserveButton.disabled = true;
+          reserveButton.textContent = 'Резервируем…';
+          try {
+            await window.SpringVisionAPI.request('reserve_country', { sourceSeasonId: eligible.id });
+            toast(`${eligible.country_name} зарезервирована для следующего сезона`);
+            await Promise.all([loadAccount(), loadAppState()]);
+          } catch (error) {
+            toast(error instanceof Error ? error.message : 'Не удалось зарезервировать страну.');
+            reserveButton.disabled = false;
+            reserveButton.textContent = 'Зарезервировать страну';
+          }
+        });
+        reservationPanel.append(reserveButton);
+      } else {
+        const reason = document.createElement('p');
+        const existing = eligible.existingReservation;
+        reason.textContent = existing?.status === 'submitted'
+          ? 'Вы уже использовали это право и отправили заявку.'
+          : eligible.blockedReason || 'Сейчас резервация недоступна.';
+        reservationPanel.append(reason);
+      }
+    } else {
+      const explanation = document.createElement('p');
+      explanation.textContent = 'Право на резервацию появляется после завершения сезона, в жюри которого вы состояли.';
+      reservationPanel.append(explanation);
+    }
+    content.append(reservationPanel);
+
     const title = document.createElement('h3');
     title.textContent = 'Мои заявки';
     content.append(title);
@@ -1389,6 +1498,7 @@
       }
       currentSeason = state.season;
       reservedCountryCodes = new Set(state.reservedCountryCodes || []);
+      currentCountryReservation = state.countryReservation || null;
       $('#seasonStatus').textContent = statusLabels[currentSeason.status] || currentSeason.status;
       const progress = ({draft:5,registration:20,moderation:35,drawn:50,jury_voting:65,televoting:80,finished:100,archived:100})[currentSeason.status] || 0;
       $('#seasonProgressLabel').textContent = statusLabels[currentSeason.status] || currentSeason.status;
