@@ -1,0 +1,55 @@
+name: SpringVision one-time USA duplicate-song notice
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/send-us-duplicate-correction.yml
+
+permissions:
+  contents: read
+
+jobs:
+  send-correction-notice:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Issue one-time edit link and notify the USA participant
+        env:
+          SUPABASE_URL: https://dgdjddkaixjlscyqkpwz.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_8e6xqrd2MvKZ4hhTOhg09A_k4QxgSzN
+          SUBMISSION_ID: efba7123-dbba-4ab8-9405-a2a5785ed575
+        shell: bash
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          http_status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+            -X POST "$SUPABASE_URL/functions/v1/api" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            --data "{\"action\":\"cron_issue_submission_edit_link\",\"submissionId\":\"$SUBMISSION_ID\"}")"
+
+          if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::SpringVision could not send the correction notice (HTTP $http_status)."
+            cat "$response_file"
+            exit 1
+          fi
+
+          python3 - "$response_file" <<'PY'
+          import json, pathlib, sys
+          data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          if not data.get("ok") or not data.get("sent"):
+              raise SystemExit("Correction notice was not confirmed as sent: " + json.dumps(data, ensure_ascii=False))
+          print(json.dumps(data, ensure_ascii=False))
+          PY
+
+          {
+            echo "### SpringVision correction notice sent"
+            echo
+            echo "- Recipient: USA submission"
+            echo "- Delivery: Telegram"
+            echo "- Edit link: one-time use, expires after 24 hours"
+            echo "- The raw link was delivered directly to the participant and is not printed in this workflow log."
+          } >> "$GITHUB_STEP_SUMMARY"
