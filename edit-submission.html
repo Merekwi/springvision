@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#a8c5aa">
+  <title>Исправление заявки · SpringVision</title>
+  <link rel="stylesheet" href="styles.css?v=20261124-submission-edit">
+  <script src="config.js?v=20261024-6"></script>
+  <style>
+    .edit-shell{width:min(100% - 28px,680px);margin:clamp(22px,6vh,64px) auto}
+    .edit-card{padding:clamp(20px,5vw,34px);border:1px solid var(--line,rgba(70,95,75,.2));border-radius:24px;background:var(--surface-card,#f0f4eb);color:var(--text,#304a36);box-shadow:var(--shadow,0 18px 48px rgba(30,55,35,.12))}
+    .edit-brand{display:flex;align-items:center;gap:10px;margin-bottom:22px;font-weight:850;letter-spacing:.04em}
+    .edit-brand img{width:42px;height:42px;object-fit:contain}
+    .edit-eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--muted,#718174)}
+    .edit-card h1{font-size:clamp(26px,5vw,38px);line-height:1.12;margin:8px 0 12px}
+    .edit-card p{line-height:1.6;color:var(--text-2,#526c57)}
+    .edit-info{padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface-inset,#e4ebdf);margin:18px 0}
+    .edit-info p{margin:4px 0}
+    .edit-deadline{font-weight:800;color:var(--text)!important}
+    .edit-form{display:grid;gap:15px;margin-top:20px}
+    .edit-form label{display:grid;gap:7px;font-weight:750;color:var(--text)}
+    .edit-form input{width:100%;min-width:0;padding:13px 14px;border:1px solid var(--line-strong,var(--line));border-radius:12px;background:var(--surface-inset,#fff);color:var(--text);font:inherit}
+    .edit-form input[type=file]{font-size:13px}
+    .edit-help{font-size:12px;font-weight:450;color:var(--muted)!important;margin:0}
+    .edit-form button{border:0;border-radius:999px;padding:14px 18px;background:linear-gradient(110deg,#d7a6c3,#c1afe9);color:#2f2635;font-weight:850;font-size:15px}
+    .edit-form button:disabled{opacity:.55;cursor:wait}
+    .edit-status{min-height:24px;font-size:13px;margin:12px 0 0}
+    .edit-error{color:#b84f56!important}.edit-success{color:#27824e!important}
+    .edit-footer{font-size:11px;text-align:center;margin:20px 0 0;color:var(--muted)}
+    html[data-theme="dark"] .edit-card{background:var(--surface-card);color:var(--text)}
+    html[data-theme="dark"] .edit-info{background:var(--surface-inset)}
+    html[data-theme="dark"] .edit-form input{background:var(--surface-inset);color:var(--text)}
+  </style>
+</head>
+<body>
+  <main class="edit-shell">
+    <section class="edit-card">
+      <div class="edit-brand"><img src="assets/brand/springvision-logo.svg" alt=""><span>SpringVision</span></div>
+      <div class="edit-eyebrow">ПЕРСОНАЛЬНАЯ ФОРМА · СЕЗОН 06</div>
+      <h1>Исправление заявки</h1>
+      <p id="intro">Проверяем персональную ссылку…</p>
+      <div id="details" class="edit-info" hidden>
+        <p><strong>Страна:</strong> <span id="country"></span></p>
+        <p><strong>Текущая заявка:</strong> <span id="currentEntry"></span></p>
+        <p class="edit-deadline" id="deadline"></p>
+      </div>
+      <form id="editForm" class="edit-form" hidden>
+        <label>Исполнитель
+          <input id="artist" name="artist" maxlength="120" required autocomplete="off">
+        </label>
+        <label>Новое название песни
+          <input id="songTitle" name="songTitle" maxlength="160" required autocomplete="off">
+          <span class="edit-help">Выберите композицию, которой нет в заявках других стран этого сезона.</span>
+        </label>
+        <label>Ссылка на новое выступление или клип
+          <input id="performanceUrl" name="performanceUrl" type="url" required placeholder="https://…">
+        </label>
+        <label>Новый 30-секундный рекап (необязательно)
+          <input id="recap" name="recap" type="file" accept="video/mp4,video/webm,video/quicktime">
+          <span class="edit-help">До 50 МБ. Загрузите новый рекап, если текущий содержит прежнюю песню.</span>
+        </label>
+        <button id="saveButton" type="submit">Сохранить исправленную заявку</button>
+      </form>
+      <p id="status" class="edit-status" role="status" aria-live="polite"></p>
+    </section>
+    <p class="edit-footer">Ссылка персональная, действует 24 часа и может быть использована только один раз.</p>
+  </main>
+<script>
+(() => {
+  'use strict';
+  const cfg = window.SPRINGVISION_CONFIG || {};
+  const token = new URLSearchParams(location.search).get('token') || '';
+  const apiUrl = (cfg.supabaseUrl || '').replace(/\/$/, '') + '/functions/v1/api';
+  const $ = (id) => document.getElementById(id);
+  const intro = $('intro');
+  const details = $('details');
+  const form = $('editForm');
+  const status = $('status');
+  const saveButton = $('saveButton');
+
+  async function call(action, payload, multipart = false) {
+    const headers = { apikey: cfg.supabaseAnonKey || '' };
+    let body;
+    if (multipart) {
+      body = payload;
+      body.append('action', action);
+      body.append('token', token);
+    } else {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify({ action, token, ...(payload || {}) });
+    }
+    const response = await fetch(apiUrl, { method: 'POST', headers, body });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Не удалось связаться с сервером SpringVision.');
+    return result;
+  }
+
+  function showError(error) {
+    intro.textContent = 'Не удалось открыть форму редактирования.';
+    status.textContent = error?.message || 'Ссылка недействительна.';
+    status.className = 'edit-status edit-error';
+    form.hidden = true;
+  }
+
+  async function init() {
+    if (!token || !cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+      throw new Error('Персональная ссылка неполная или недействительна.');
+    }
+    const data = await call('submission_edit_info');
+    intro.textContent = data.seasonTitle + ' · исправление заявки участника';
+    $('country').textContent = data.countryName + ' (' + String(data.countryCode || '').toUpperCase() + ')';
+    $('currentEntry').textContent = data.artist + ' — ' + data.songTitle;
+    $('deadline').textContent = 'Ссылка действует до ' + new Date(data.expiresAt).toLocaleString('ru-RU', {
+      day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow'
+    }) + ' (МСК).';
+    $('artist').value = data.artist || '';
+    $('songTitle').value = data.songTitle || '';
+    $('performanceUrl').value = data.performanceUrl || '';
+    details.hidden = false;
+    form.hidden = false;
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const artist = $('artist').value.trim();
+    const songTitle = $('songTitle').value.trim();
+    const performanceUrl = $('performanceUrl').value.trim();
+    const recap = $('recap').files?.[0] || null;
+    if (!artist || !songTitle || !performanceUrl) {
+      status.textContent = 'Заполните исполнителя, название песни и ссылку на выступление.';
+      status.className = 'edit-status edit-error';
+      return;
+    }
+    let parsed;
+    try { parsed = new URL(performanceUrl); }
+    catch { status.textContent = 'Проверьте ссылку на выступление.'; status.className = 'edit-status edit-error'; return; }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      status.textContent = 'Разрешены только ссылки http:// и https://.';
+      status.className = 'edit-status edit-error';
+      return;
+    }
+    if (recap && (recap.size > 50 * 1024 * 1024 || !['video/mp4','video/webm','video/quicktime'].includes(recap.type))) {
+      status.textContent = 'Рекап должен быть MP4, WebM или MOV и не превышать 50 МБ.';
+      status.className = 'edit-status edit-error';
+      return;
+    }
+
+    saveButton.disabled = true;
+    saveButton.textContent = 'Сохраняем…';
+    status.textContent = 'Проверяем уникальность композиции и сохраняем изменения…';
+    status.className = 'edit-status';
+    try {
+      const payload = new FormData();
+      payload.append('artist', artist);
+      payload.append('songTitle', songTitle);
+      payload.append('performanceUrl', performanceUrl);
+      if (recap) payload.append('recap', recap, recap.name);
+      const result = await call('submission_edit_submit', payload, true);
+      form.hidden = true;
+      details.hidden = true;
+      intro.textContent = 'Заявка успешно исправлена';
+      status.textContent = result.message || 'Изменения сохранены. Ссылка больше не действует.';
+      status.className = 'edit-status edit-success';
+    } catch (error) {
+      status.textContent = error?.message || 'Не удалось сохранить изменения.';
+      status.className = 'edit-status edit-error';
+      saveButton.disabled = false;
+      saveButton.textContent = 'Повторить сохранение';
+    }
+  });
+
+  init().catch(showError);
+})();
+</script>
+</body>
+</html>
