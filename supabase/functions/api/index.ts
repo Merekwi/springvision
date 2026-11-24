@@ -52,6 +52,7 @@ async function disqualifyExpiredSubmissionEdits(db: any, botToken: string) {
     ]);
     if (submissionResult.error) throw new Error("Не удалось проверить заявку по истёкшей ссылке.");
     const submission = submissionResult.data;
+    let wasDisqualified = false;
     if (submission && submission.user_id === ticket.user_id &&
         normalizeSongKey(submission.song_title) === normalizeSongKey(ticket.original_song_title) &&
         ["pending", "approved"].includes(submission.status)) {
@@ -81,8 +82,9 @@ async function disqualifyExpiredSubmissionEdits(db: any, botToken: string) {
         details: { season_id: ticket.season_id, user_id: ticket.user_id, original_song_title: ticket.original_song_title }
       });
       disqualified++;
+      wasDisqualified = true;
     }
-    await db.from("submission_edit_tokens").update({ used_at: now, disqualified_at: submission ? now : null })
+    await db.from("submission_edit_tokens").update({ used_at: now, disqualified_at: wasDisqualified ? now : null })
       .eq("id", ticket.id).is("used_at", null);
   }
   return disqualified;
@@ -266,13 +268,16 @@ Deno.serve(async (request) => {
     if (duplicate) return json({ error: "Эта песня уже представлена другой страной. Выберите уникальную композицию." }, 409);
 
     const recapValue = form.get("recap");
-    const recap = recapValue instanceof File && recapValue.size ? recapValue : null;
-    if (recap && (recap.size > 50 * 1024 * 1024 || !["video/mp4", "video/webm", "video/quicktime"].includes(recap.type))) {
+    if (!(recapValue instanceof File) || !recapValue.size) {
+      return json({ error: "Прикрепите новый 30-секундный рекап для выбранной песни." }, 400);
+    }
+    const recap = recapValue;
+    if (recap.size > 50 * 1024 * 1024 || !["video/mp4", "video/webm", "video/quicktime"].includes(recap.type)) {
       return json({ error: "Новый рекап должен быть MP4, WebM или MOV и не превышать 50 МБ." }, 400);
     }
 
     let newRecapPath: string | null = null;
-    if (recap) {
+    {
       const safeName = recap.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "updated-recap";
       newRecapPath = "recaps/" + ticket.season_id + "/" + ticket.submission_id + "/correction-" + crypto.randomUUID() + "-" + safeName;
       const uploaded = await db.storage.from(BUCKET).upload(newRecapPath, recap, { contentType: recap.type, upsert: false });
@@ -412,7 +417,7 @@ Deno.serve(async (request) => {
       editUrl,
       "",
       "После сохранения изменений заявка будет отправлена на повторную модерацию. Спасибо за понимание!"
-    ].join("\\n");
+    ].join("\n");
     try {
       await sendTelegram(botToken, Number(profileData.telegram_id), message);
     } catch (error) {
