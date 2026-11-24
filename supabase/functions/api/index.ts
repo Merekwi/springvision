@@ -355,6 +355,88 @@ Deno.serve(async (request) => {
   }
 
 
+  if (action === "check_us_duplicate_song_deadline") {
+    const submissionId = String(body.submissionId || "");
+    if (submissionId !== "efba7123-dbba-4ab8-9405-a2a5785ed575") {
+      return json({ error: "Проверка недоступна для указанной заявки." }, 403);
+    }
+    const ticketResult = await db.from("submission_edit_tokens")
+      .select("id,submission_id,season_id,user_id,original_song_title,expires_at,used_at,disqualified_at")
+      .eq("submission_id", submissionId).maybeSingle();
+    if (ticketResult.error) throw new Error("Не удалось проверить срок исправления заявки.");
+    if (!ticketResult.data) return json({ ok: true, completed: true, reason: "no_ticket" });
+    const ticket = ticketResult.data;
+    if (ticket.used_at) {
+      return json({ ok: true, completed: true, disqualified: Boolean(ticket.disqualified_at), reason: "already_closed" });
+    }
+    if (Date.now() < Date.parse(ticket.expires_at)) {
+      return json({ ok: true, completed: false, expiresAt: ticket.expires_at });
+    }
+
+    const claimedAt = new Date().toISOString();
+    const claim = await db.from("submission_edit_tokens")
+      .update({ used_at: claimedAt, disqualified_at: claimedAt })
+      .eq("id", ticket.id).is("used_at", null).lte("expires_at", claimedAt)
+      .select("id").maybeSingle();
+    if (claim.error || !claim.data) {
+      const refreshed = await db.from("submission_edit_tokens").select("used_at,disqualified_at")
+        .eq("id", ticket.id).maybeSingle();
+      return json({ ok: true, completed: Boolean(refreshed.data?.used_at), disqualified: Boolean(refreshed.data?.disqualified_at) });
+    }
+
+    const submissionResult = await db.from("submissions")
+      .select("id,season_id,user_id,country_code,artist,song_title,status")
+      .eq("id", ticket.submission_id).eq("season_id", ticket.season_id).maybeSingle();
+    if (submissionResult.error) {
+      await db.from("submission_edit_tokens").update({ used_at: null, disqualified_at: null }).eq("id", ticket.id);
+      throw new Error("Не удалось проверить заявку перед решением о дисквалификации.");
+    }
+    const submission = submissionResult.data;
+    const stillUncorrected = Boolean(
+      submission &&
+      submission.user_id === ticket.user_id &&
+      normalizeSongKey(submission.song_title) === normalizeSongKey(ticket.original_song_title) &&
+      ["pending", "approved"].includes(submission.status)
+    );
+    if (!stillUncorrected) {
+      await db.from("submission_edit_tokens").update({ disqualified_at: null }).eq("id", ticket.id);
+      return json({ ok: true, completed: true, disqualified: false, reason: "submission_corrected_or_closed" });
+    }
+
+    const update = await db.from("submissions").update({
+      status: "rejected",
+      moderation_comment: "Дисквалификация: дублирующаяся песня не была заменена в течение 24 часов после уведомления организатора.",
+      reviewed_by: null,
+      reviewed_at: claimedAt
+    }).eq("id", submission.id).eq("status", submission.status);
+    if (update.error) {
+      await db.from("submission_edit_tokens").update({ used_at: null, disqualified_at: null }).eq("id", ticket.id);
+      throw new Error("Не удалось дисквалифицировать заявку по истечении срока: " + update.error.message);
+    }
+    await db.from("season_jury").update({ revoked_at: claimedAt })
+      .eq("season_id", ticket.season_id).eq("user_id", ticket.user_id).is("revoked_at", null);
+
+    let notificationSent = false;
+    const profileResult = await db.from("profiles").select("telegram_id").eq("id", ticket.user_id).maybeSingle();
+    if (profileResult.data?.telegram_id) {
+      try {
+        await sendTelegram(botToken, Number(profileResult.data.telegram_id),
+          "Здравствуйте! Срок для исправления дублирующейся песни в заявке SpringVision истёк. Заявка США дисквалифицирована, а право жюри на этот сезон отозвано. При необходимости свяжитесь с организаторами конкурса.");
+        notificationSent = true;
+      } catch (error) {
+        console.error("Could not send duplicate-song disqualification notice:", submission.id, error);
+      }
+    }
+    await db.from("audit_log").insert({
+      actor_id: null,
+      action: "submission_disqualified_duplicate_song_deadline",
+      entity_type: "submission",
+      entity_id: submission.id,
+      details: { season_id: ticket.season_id, user_id: ticket.user_id, original_song_title: ticket.original_song_title }
+    });
+    return json({ ok: true, completed: true, disqualified: true, notificationSent });
+  }
+
   if (action === "cron_jury_reminders") {
     const cronSecret = Deno.env.get("SPRINGVISION_CRON_SECRET") || "";
     const supplied = request.headers.get("x-cron-secret") || "";
