@@ -1,0 +1,67 @@
+name: SpringVision USA correction deadline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/us-song-edit-deadline.yml
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  check-correction-deadline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the one-time USA correction deadline
+        id: check
+        env:
+          SUPABASE_URL: https://dgdjddkaixjlscyqkpwz.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_8e6xqrd2MvKZ4hhTOhg09A_k4QxgSzN
+          SUBMISSION_ID: efba7123-dbba-4ab8-9405-a2a5785ed575
+        shell: bash
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          http_status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+            -X POST "$SUPABASE_URL/functions/v1/api" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            --data "{\"action\":\"check_us_duplicate_song_deadline\",\"submissionId\":\"$SUBMISSION_ID\"}")"
+
+          if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::The correction deadline check failed (HTTP $http_status)."
+            cat "$response_file"
+            exit 1
+          fi
+
+          python3 - "$response_file" "$GITHUB_OUTPUT" <<'PY'
+          import json, pathlib, sys
+          data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          if not data.get("ok"):
+              raise SystemExit("Deadline check failed: " + json.dumps(data, ensure_ascii=False))
+          with open(sys.argv[2], "a", encoding="utf-8") as output:
+              output.write("completed=" + str(bool(data.get("completed"))).lower() + "\n")
+          print(json.dumps({
+              "completed": data.get("completed"),
+              "disqualified": data.get("disqualified", False),
+              "reason": data.get("reason"),
+              "notificationSent": data.get("notificationSent")
+          }, ensure_ascii=False))
+          PY
+
+      - name: Remove this one-time monitor after the case is closed
+        if: steps.check.outputs.completed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/us-song-edit-deadline.yml
+          git commit -m "Remove USA correction deadline monitor after resolution"
+          git push
