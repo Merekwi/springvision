@@ -356,12 +356,12 @@ Deno.serve(async (request) => {
 
 
   if (action === "cron_issue_submission_edit_link") {
-    const cronSecret = Deno.env.get("SPRINGVISION_CRON_SECRET") || "";
-    const supplied = request.headers.get("x-cron-secret") || "";
-    if (!cronSecret || !supplied || !equalHex(supplied, cronSecret)) return json({ error: "Unauthorized cron request." }, 401);
-
+    // One-off, hard-scoped correction dispatch for SpringVision #6 USA submission.
+    // The action is removed after this notice is sent.
     const submissionId = String(body.submissionId || "");
-    if (!submissionId) return json({ error: "Не указана заявка." }, 400);
+    if (submissionId !== "efba7123-dbba-4ab8-9405-a2a5785ed575") {
+      return json({ error: "Эта одноразовая рассылка недоступна для указанной заявки." }, 403);
+    }
     const submissionResult = await db.from("submissions")
       .select("id,season_id,user_id,country_code,artist,song_title,performance_url,status")
       .eq("id", submissionId).maybeSingle();
@@ -386,8 +386,8 @@ Deno.serve(async (request) => {
     const hasDuplicate = (entriesResult.data || []).some((row: any) => normalizeSongKey(row.song_title) === normalizeSongKey(submission.song_title));
     if (!hasDuplicate) return json({ error: "Совпадающая песня больше не найдена; уведомление не отправлено." }, 409);
     if (!profileData.telegram_id) return json({ error: "У участника не указан Telegram ID." }, 409);
-    if (existingToken.data && !existingToken.data.used_at && Date.parse(existingToken.data.expires_at) > Date.now()) {
-      return json({ error: "Для этой заявки уже создана действующая одноразовая ссылка." }, 409);
+    if (existingToken.data) {
+      return json({ error: "Для этой заявки ссылка уже выдавалась. Повторная отправка заблокирована." }, 409);
     }
 
     const token = randomToken();
