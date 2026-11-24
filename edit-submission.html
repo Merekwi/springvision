@@ -57,8 +57,8 @@
           <input id="performanceUrl" name="performanceUrl" type="url" required placeholder="https://…">
         </label>
         <label>Новый 30-секундный рекап (необязательно)
-          <input id="recap" name="recap" type="file" accept="video/mp4,video/webm,video/quicktime">
-          <span class="edit-help">До 50 МБ. Загрузите новый рекап, если текущий содержит прежнюю песню.</span>
+          <input id="recap" name="recap" type="file" accept="video/mp4,video/webm,video/quicktime" required>
+          <span class="edit-help">Обязательно: новый рекап выбранной песни, MP4, WebM или MOV, до 50 МБ.</span>
         </label>
         <button id="saveButton" type="submit">Сохранить исправленную заявку</button>
       </form>
@@ -127,8 +127,8 @@
     const songTitle = $('songTitle').value.trim();
     const performanceUrl = $('performanceUrl').value.trim();
     const recap = $('recap').files?.[0] || null;
-    if (!artist || !songTitle || !performanceUrl) {
-      status.textContent = 'Заполните исполнителя, название песни и ссылку на выступление.';
+    if (!artist || !songTitle || !performanceUrl || !recap) {
+      status.textContent = 'Заполните все поля и прикрепите новый 30-секундный рекап.';
       status.className = 'edit-status edit-error';
       return;
     }
