@@ -33,6 +33,61 @@ function randomToken() {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function normalizeSongKey(value: string) {
+  return String(value || "").normalize("NFKC").toLocaleLowerCase("en-US").replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+async function disqualifyExpiredSubmissionEdits(db: any, botToken: string) {
+  const now = new Date().toISOString();
+  const expiredResult = await db.from("submission_edit_tokens")
+    .select("id,submission_id,season_id,user_id,original_song_title")
+    .is("used_at", null).lte("expires_at", now);
+  if (expiredResult.error) throw new Error("Не удалось проверить просроченные ссылки на изменение заявок: " + expiredResult.error.message);
+  let disqualified = 0;
+  for (const ticket of expiredResult.data || []) {
+    const [submissionResult, profileResult] = await Promise.all([
+      db.from("submissions").select("id,user_id,season_id,country_code,song_title,status")
+        .eq("id", ticket.submission_id).eq("season_id", ticket.season_id).maybeSingle(),
+      db.from("profiles").select("telegram_id").eq("id", ticket.user_id).maybeSingle()
+    ]);
+    if (submissionResult.error) throw new Error("Не удалось проверить заявку по истёкшей ссылке.");
+    const submission = submissionResult.data;
+    if (submission && submission.user_id === ticket.user_id &&
+        normalizeSongKey(submission.song_title) === normalizeSongKey(ticket.original_song_title) &&
+        ["pending", "approved"].includes(submission.status)) {
+      const update = await db.from("submissions").update({
+        status: "rejected",
+        moderation_comment: "Дисквалификация: дублирующаяся песня не была заменена в течение 24 часов после уведомления организатора.",
+        reviewed_by: null,
+        reviewed_at: now
+      }).eq("id", submission.id).eq("status", submission.status);
+      if (update.error) throw new Error("Не удалось применить дисквалификацию после пропущенного срока: " + update.error.message);
+
+      await db.from("season_jury").update({ revoked_at: now })
+        .eq("season_id", ticket.season_id).eq("user_id", ticket.user_id).is("revoked_at", null);
+      if (profileResult.data?.telegram_id) {
+        try {
+          await sendTelegram(botToken, Number(profileResult.data.telegram_id),
+            "Здравствуйте! Срок для исправления дублирующейся песни в заявке SpringVision истёк. Заявка США дисквалифицирована. При необходимости свяжитесь с организаторами конкурса.");
+        } catch (error) {
+          console.error("Could not notify participant about automatic disqualification:", ticket.submission_id, error);
+        }
+      }
+      await db.from("audit_log").insert({
+        actor_id: null,
+        action: "submission_disqualified_duplicate_song_deadline",
+        entity_type: "submission",
+        entity_id: submission.id,
+        details: { season_id: ticket.season_id, user_id: ticket.user_id, original_song_title: ticket.original_song_title }
+      });
+      disqualified++;
+    }
+    await db.from("submission_edit_tokens").update({ used_at: now, disqualified_at: submission ? now : null })
+      .eq("id", ticket.id).is("used_at", null);
+  }
+  return disqualified;
+}
+
 async function verifyTelegramInitData(initData: string, botToken: string) {
   const params = new URLSearchParams(initData);
   const receivedHash = params.get("hash");
@@ -81,6 +136,7 @@ async function sendTelegram(botToken: string, telegramId: number, text: string) 
 
 
 async function runJuryCron(db: any, botToken: string) {
+  const disqualifiedCorrections = await disqualifyExpiredSubmissionEdits(db, botToken);
   const now = Date.now();
   const seasonsResult = await db.from("seasons").select("id,title,jury_deadline").eq("status","jury_voting").eq("jury_voting_open",true);
   if (seasonsResult.error) throw new Error(seasonsResult.error.message);
@@ -124,7 +180,7 @@ async function runJuryCron(db: any, botToken: string) {
       closedSeasons++;
     }
   }
-  return json({ok:true,remindersSent,remindersFailed,randomBallots,closedSeasons});
+  return json({ok:true,remindersSent,remindersFailed,randomBallots,closedSeasons,disqualifiedCorrections});
 }
 
 Deno.serve(async (request) => {
@@ -154,6 +210,112 @@ Deno.serve(async (request) => {
 
   const action = String(body.action || "");
   const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  if (action === "submission_edit_info" || action === "submission_edit_submit") {
+    const token = String(body.token || "");
+    if (!/^[a-f0-9]{64}$/.test(token)) return json({ error: "Персональная ссылка недействительна." }, 400);
+    const tokenHash = await sha256Hex(token);
+    const tokenResult = await db.from("submission_edit_tokens")
+      .select("id,submission_id,season_id,user_id,original_song_title,expires_at,used_at,disqualified_at")
+      .eq("token_hash", tokenHash).maybeSingle();
+    if (tokenResult.error || !tokenResult.data) return json({ error: "Ссылка не найдена или недействительна." }, 404);
+    const ticket = tokenResult.data;
+    if (ticket.used_at) return json({ error: ticket.disqualified_at ? "Срок исправления истёк, заявка дисквалифицирована." : "Эта ссылка уже использована." }, 410);
+    if (Date.parse(ticket.expires_at) <= Date.now()) return json({ error: "Срок действия ссылки истёк. Он составлял ровно 24 часа с момента отправки уведомления." }, 410);
+
+    const [submissionResult, seasonResult] = await Promise.all([
+      db.from("submissions").select("id,season_id,user_id,country_code,artist,song_title,performance_url,status,recap_storage_path")
+        .eq("id", ticket.submission_id).eq("season_id", ticket.season_id).maybeSingle(),
+      db.from("seasons").select("id,title,status,registration_closes_at").eq("id", ticket.season_id).maybeSingle()
+    ]);
+    if (submissionResult.error || !submissionResult.data || submissionResult.data.user_id !== ticket.user_id) {
+      return json({ error: "Заявка не найдена или доступ к ней больше недоступен." }, 404);
+    }
+    if (seasonResult.error || !seasonResult.data) return json({ error: "Сезон не найден." }, 404);
+    const submission = submissionResult.data;
+    const season = seasonResult.data;
+    if (season.status !== "registration" || !season.registration_closes_at || Date.now() > Date.parse(season.registration_closes_at)) {
+      return json({ error: "Регистрация сезона закрыта. Изменение заявки недоступно." }, 410);
+    }
+
+    if (action === "submission_edit_info") {
+      const countryResult = await db.from("countries").select("name").eq("code", submission.country_code).maybeSingle();
+      return json({
+        ok: true, seasonTitle: season.title, countryCode: submission.country_code,
+        countryName: countryResult.data?.name || submission.country_code.toUpperCase(),
+        artist: submission.artist, songTitle: submission.song_title,
+        performanceUrl: submission.performance_url, expiresAt: ticket.expires_at
+      });
+    }
+
+    if (!form) return json({ error: "Откройте форму редактирования по персональной ссылке." }, 400);
+    const artist = String(body.artist || "").trim();
+    const songTitle = String(body.songTitle || "").trim();
+    const performanceUrl = String(body.performanceUrl || "").trim();
+    if (!artist || artist.length > 120 || !songTitle || songTitle.length > 160 || !/^https?:\/\//i.test(performanceUrl)) {
+      return json({ error: "Укажите исполнителя, новое название песни и корректную ссылку на выступление." }, 400);
+    }
+    if (normalizeSongKey(songTitle) === normalizeSongKey(ticket.original_song_title)) {
+      return json({ error: "Нужно заменить песню на другую композицию, а не оставить прежнее название." }, 400);
+    }
+
+    const othersResult = await db.from("submissions").select("id,song_title")
+      .eq("season_id", ticket.season_id).in("status", ["pending", "approved"]).neq("id", ticket.submission_id);
+    if (othersResult.error) throw new Error("Не удалось проверить уникальность новой песни: " + othersResult.error.message);
+    const duplicate = (othersResult.data || []).find((row: any) => normalizeSongKey(row.song_title) === normalizeSongKey(songTitle));
+    if (duplicate) return json({ error: "Эта песня уже представлена другой страной. Выберите уникальную композицию." }, 409);
+
+    const recapValue = form.get("recap");
+    const recap = recapValue instanceof File && recapValue.size ? recapValue : null;
+    if (recap && (recap.size > 50 * 1024 * 1024 || !["video/mp4", "video/webm", "video/quicktime"].includes(recap.type))) {
+      return json({ error: "Новый рекап должен быть MP4, WebM или MOV и не превышать 50 МБ." }, 400);
+    }
+
+    let newRecapPath: string | null = null;
+    if (recap) {
+      const safeName = recap.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "updated-recap";
+      newRecapPath = "recaps/" + ticket.season_id + "/" + ticket.submission_id + "/correction-" + crypto.randomUUID() + "-" + safeName;
+      const uploaded = await db.storage.from(BUCKET).upload(newRecapPath, recap, { contentType: recap.type, upsert: false });
+      if (uploaded.error) throw new Error("Не удалось загрузить новый рекап: " + uploaded.error.message);
+    }
+
+    const claimed = await db.from("submission_edit_tokens")
+      .update({ used_at: new Date().toISOString() })
+      .eq("id", ticket.id).is("used_at", null).gt("expires_at", new Date().toISOString())
+      .select("id").maybeSingle();
+    if (claimed.error || !claimed.data) {
+      if (newRecapPath) await db.storage.from(BUCKET).remove([newRecapPath]);
+      return json({ error: "Ссылка уже использована или срок её действия истёк." }, 410);
+    }
+
+    const oldRecapPath = submission.recap_storage_path;
+    const now = new Date().toISOString();
+    const updated = await db.from("submissions").update({
+      artist, song_title: songTitle, performance_url: performanceUrl,
+      ...(newRecapPath ? { recap_storage_path: newRecapPath } : {}),
+      status: "pending",
+      moderation_comment: "Заявка изменена участником после уведомления организатора и ожидает повторной модерации.",
+      reviewed_by: null, reviewed_at: null
+    }).eq("id", ticket.submission_id).eq("user_id", ticket.user_id).select("id,status").single();
+    if (updated.error) {
+      await db.from("submission_edit_tokens").update({ used_at: null }).eq("id", ticket.id);
+      if (newRecapPath) await db.storage.from(BUCKET).remove([newRecapPath]);
+      throw new Error("Не удалось обновить заявку: " + updated.error.message);
+    }
+
+    await db.from("season_jury").update({ revoked_at: now })
+      .eq("season_id", ticket.season_id).eq("user_id", ticket.user_id).is("revoked_at", null);
+    if (newRecapPath && submission.recap_storage_path) {
+      const removed = await db.storage.from(BUCKET).remove([submission.recap_storage_path]);
+      if (removed.error) console.error("New recap saved but old recap cleanup failed:", ticket.submission_id, removed.error);
+    }
+    await db.from("audit_log").insert({
+      actor_id: null, action: "submission_updated_via_one_time_link",
+      entity_type: "submission", entity_id: ticket.submission_id,
+      details: { season_id: ticket.season_id, user_id: ticket.user_id, recap_replaced: Boolean(newRecapPath) }
+    });
+    return json({ ok: true, message: "Заявка обновлена и отправлена на повторную модерацию. Персональная ссылка больше не действует." });
+  }
 
   if (action === "jury_photo_info" || action === "jury_photo_upload") {
     const token=String(body.token||"");
@@ -187,6 +349,83 @@ Deno.serve(async (request) => {
     return json({ok:true,message:"Фото представителя успешно сохранено."});
   }
 
+
+  if (action === "cron_issue_submission_edit_link") {
+    const cronSecret = Deno.env.get("SPRINGVISION_CRON_SECRET") || "";
+    const supplied = request.headers.get("x-cron-secret") || "";
+    if (!cronSecret || !supplied || !equalHex(supplied, cronSecret)) return json({ error: "Unauthorized cron request." }, 401);
+
+    const submissionId = String(body.submissionId || "");
+    if (!submissionId) return json({ error: "Не указана заявка." }, 400);
+    const submissionResult = await db.from("submissions")
+      .select("id,season_id,user_id,country_code,artist,song_title,performance_url,status")
+      .eq("id", submissionId).maybeSingle();
+    if (submissionResult.error || !submissionResult.data) return json({ error: "Заявка не найдена." }, 404);
+    const submission = submissionResult.data;
+    const [seasonResult, profileResult, entriesResult, existingToken] = await Promise.all([
+      db.from("seasons").select("id,season_number,title,status,registration_closes_at").eq("id", submission.season_id).maybeSingle(),
+      db.from("profiles").select("telegram_id,telegram_username,display_name").eq("id", submission.user_id).maybeSingle(),
+      db.from("submissions").select("id,song_title").eq("season_id", submission.season_id)
+        .in("status", ["pending", "approved"]).neq("id", submission.id),
+      db.from("submission_edit_tokens").select("id,expires_at,used_at").eq("submission_id", submission.id).maybeSingle()
+    ]);
+    if (seasonResult.error || !seasonResult.data || profileResult.error || !profileResult.data || entriesResult.error || existingToken.error) {
+      return json({ error: "Не удалось проверить заявку, сезон или контакт участника." }, 500);
+    }
+    const season = seasonResult.data;
+    const profileData = profileResult.data;
+    if (submission.country_code !== "us") return json({ error: "Эта отправка доступна только для заявки США." }, 403);
+    if (season.status !== "registration" || !season.registration_closes_at || Date.now() >= Date.parse(season.registration_closes_at)) {
+      return json({ error: "Регистрация сезона уже закрыта." }, 409);
+    }
+    const hasDuplicate = (entriesResult.data || []).some((row: any) => normalizeSongKey(row.song_title) === normalizeSongKey(submission.song_title));
+    if (!hasDuplicate) return json({ error: "Совпадающая песня больше не найдена; уведомление не отправлено." }, 409);
+    if (!profileData.telegram_id) return json({ error: "У участника не указан Telegram ID." }, 409);
+    if (existingToken.data && !existingToken.data.used_at && Date.parse(existingToken.data.expires_at) > Date.now()) {
+      return json({ error: "Для этой заявки уже создана действующая одноразовая ссылка." }, 409);
+    }
+
+    const token = randomToken();
+    const tokenHash = await sha256Hex(token);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const tokenSave = await db.from("submission_edit_tokens").upsert({
+      token_hash: tokenHash, submission_id: submission.id, season_id: submission.season_id,
+      user_id: submission.user_id, original_artist: submission.artist,
+      original_song_title: submission.song_title, expires_at: expiresAt, used_at: null, disqualified_at: null
+    }, { onConflict: "submission_id" });
+    if (tokenSave.error) return json({ error: "Не удалось создать одноразовую ссылку: " + tokenSave.error.message }, 500);
+
+    const editUrl = "https://merekwi.github.io/springvision/edit-submission.html?token=" + token;
+    const deadlineText = new Date(expiresAt).toLocaleString("ru-RU", {
+      day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow"
+    });
+    const message = [
+      "Здравствуйте! Пишет команда SpringVision.",
+      "",
+      "При проверке заявок сезона «" + season.title + "» обнаружено совпадение: композиция «" + submission.song_title + "» в исполнении " + submission.artist + " уже указана в заявке Польши. Заявка США была зарегистрирована позднее.",
+      "",
+      "Приносим извинения за неудобство. Пожалуйста, замените песню на другую уникальную композицию и обновите ссылку на выступление. Если ваш 30-секундный рекап содержит прежнюю песню, загрузите новый рекап в форме редактирования.",
+      "",
+      "На исправление предоставляется 24 часа: до " + deadlineText + " (московское время, UTC+3). Если до указанного срока заявка не будет исправлена, она будет дисквалифицирована.",
+      "",
+      "Персональная ссылка для редактирования заявки (одноразовая, действует 24 часа):",
+      editUrl,
+      "",
+      "После сохранения изменений заявка будет отправлена на повторную модерацию. Спасибо за понимание!"
+    ].join("\\n");
+    try {
+      await sendTelegram(botToken, Number(profileData.telegram_id), message);
+    } catch (error) {
+      await db.from("submission_edit_tokens").update({ used_at: new Date().toISOString() }).eq("submission_id", submission.id);
+      return json({ error: "Ссылка создана, но Telegram не доставил уведомление: " + (error instanceof Error ? error.message : "ошибка доставки") }, 502);
+    }
+    await db.from("audit_log").insert({
+      actor_id: null, action: "duplicate_song_correction_notice_sent",
+      entity_type: "submission", entity_id: submission.id,
+      details: { season_id: submission.season_id, country_code: submission.country_code, expires_at: expiresAt, recipient_telegram: profileData.telegram_username }
+    });
+    return json({ ok: true, sent: true, expiresAt, countryCode: submission.country_code, recipient: profileData.telegram_username });
+  }
 
   if (action === "cron_jury_reminders") {
     const cronSecret = Deno.env.get("SPRINGVISION_CRON_SECRET") || "";
