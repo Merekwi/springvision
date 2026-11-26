@@ -3,6 +3,7 @@ name: Validate SpringVision
 on:
   push:
     branches:
+      - main
       - feature/springvision-backend
   pull_request:
     branches:
@@ -21,8 +22,10 @@ jobs:
         run: |
           node --check app.js
           node --check api.js
-      - name: Type-check Supabase Edge Function
-        run: deno check supabase/functions/api/index.ts
+      - name: Type-check Supabase Edge Functions
+        run: |
+          deno check supabase/functions/api/index.ts
+          deno check supabase/functions/telegram-bot/index.ts
       - name: Verify heart flag assets
         run: |
           test "$(find assets/flags/heart -maxdepth 1 -type f -name '*.svg' | wc -l)" -ge 150
