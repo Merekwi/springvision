@@ -392,13 +392,12 @@ Deno.serve(async (request) => {
       throw new Error("Не удалось проверить заявку перед решением о дисквалификации.");
     }
     const submission = submissionResult.data;
-    const stillUncorrected = Boolean(
-      submission &&
-      submission.user_id === ticket.user_id &&
-      normalizeSongKey(submission.song_title) === normalizeSongKey(ticket.original_song_title) &&
-      ["pending", "approved"].includes(submission.status)
-    );
-    if (!stillUncorrected) {
+    if (
+      !submission ||
+      submission.user_id !== ticket.user_id ||
+      normalizeSongKey(submission.song_title) !== normalizeSongKey(ticket.original_song_title) ||
+      !["pending", "approved"].includes(submission.status)
+    ) {
       await db.from("submission_edit_tokens").update({ disqualified_at: null }).eq("id", ticket.id);
       return json({ ok: true, completed: true, disqualified: false, reason: "submission_corrected_or_closed" });
     }
