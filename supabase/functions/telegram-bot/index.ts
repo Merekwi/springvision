@@ -17,14 +17,21 @@ async function sha256Hex(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function telegramCall(token: string, method: string, body: Record<string, unknown> = {}) {
+type TelegramApiResponse = {
+  httpStatus: number;
+  ok?: boolean;
+  description?: string;
+  [key: string]: unknown;
+};
+
+async function telegramCall(token: string, method: string, body: Record<string, unknown> = {}): Promise<TelegramApiResponse> {
   const response = await fetch("https://api.telegram.org/bot" + token + "/" + method, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await response.json().catch(() => ({}));
-  return { httpStatus: response.status, ...(data as Record<string, unknown>) };
+  const data: Record<string, unknown> = await response.json().catch((): Record<string, unknown> => ({}));
+  return { httpStatus: response.status, ...data } as TelegramApiResponse;
 }
 
 function publicWebhookInfo(info: Record<string, any>) {
