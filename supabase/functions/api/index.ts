@@ -724,6 +724,15 @@ ${link}
             (countryHoldResult.data.user_id !== profile.id || countryHoldResult.data.target_season_id !== seasonId)) {
           throw new Error("Эта страна зарезервирована другим участником.");
         }
+
+        const activeSongs = await db.from("submissions").select("song_title")
+          .eq("season_id", seasonId).in("status", ["pending", "approved"]);
+        if (activeSongs.error) throw new Error("Не удалось проверить, свободна ли песня. Попробуй ещё раз.");
+        const duplicateSong = (activeSongs.data || []).find((row: any) =>
+          normalizeSongKey(row.song_title) === normalizeSongKey(songTitle)
+        );
+        if (duplicateSong) throw new Error("Эта песня уже выбрана другой страной. Выбери другую композицию.");
+
         const path = `recaps/${seasonId}/${crypto.randomUUID()}-${recap.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80)}`;
         const photoPath = `performer-photos/${seasonId}/${crypto.randomUUID()}.${photoExtension}`;
         await uploadFile(recap, path);
@@ -738,6 +747,9 @@ ${link}
         }).select("id,status").single();
         if (result.error) {
           await db.storage.from(BUCKET).remove([path, photoPath]);
+          if (result.error.code === "23505" && String(result.error.message || "").includes("submissions_unique_active_song_per_season")) {
+            throw new Error("Эта песня уже выбрана другой страной. Выбери другую композицию.");
+          }
           if (result.error.code === "23505") throw new Error("Эта страна или ваш аккаунт уже заняты заявкой в текущем сезоне.");
           throw new Error("Не удалось сохранить заявку: " + result.error.message);
         }
@@ -1529,9 +1541,12 @@ ${link}
         if (ownTarget) {
           throw new Error("Жюри не может голосовать за собственную страну ни одним баллом.");
         }
-        await db.from("jury_votes").delete().eq("season_id",seasonId).eq("juror_id",profile.id).eq("is_random_fallback",false);
-        const saved = await db.from("jury_votes").insert(votes.map(v=>({season_id:seasonId,juror_id:profile.id,target_submission_id:v.submissionId,points:v.points})));
-        if (saved.error) throw new Error("Не удалось сохранить голос жюри: " + saved.error.message);
+        const saved = await db.rpc("replace_springvision_jury_ballot", {
+          p_season_id: seasonId,
+          p_juror_id: profile.id,
+          p_votes: votes.map(v => ({ submissionId: v.submissionId, points: v.points })),
+        });
+        if (saved.error) throw new Error("Не удалось сохранить оценки. Старый бюллетень сохранён. " + saved.error.message);
         await writeAudit("jury_vote_submitted","season",seasonId);
         return json({ ok: true });
       }
