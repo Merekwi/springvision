@@ -22,6 +22,13 @@
    - `SPRINGVISION_CRON_SECRET` — длинная случайная строка, которую больше нигде публично не используете.
 3. Не добавляйте `SUPABASE_SERVICE_ROLE_KEY` вручную в клиентский код. Supabase предоставляет эту переменную Edge Function автоматически.
 
+## Входящие сообщения Telegram-бота
+
+- Для `@SpringVisionnbot` развёрнута Edge Function `telegram-bot` с настроенным webhook.
+- При личном сообщении бот отвечает, что сообщения не принимаются; регистрация и голосование доступны в Mini App через кнопку **OPEN**.
+- Текст входящих сообщений не записывается и не пересылается. В `telegram_bot_updates` сохраняются только Telegram `update_id` для защиты от повторной обработки.
+- Webhook защищён через Telegram `secret_token`, производный от серверного `TELEGRAM_BOT_TOKEN`. Не меняйте webhook вручную без обновления этой функции.
+
 ## Напоминания жюри
 
 В GitHub откройте **Settings → Secrets and variables → Actions** и добавьте:
