@@ -20,7 +20,8 @@
     if (status === 401 || /подпись telegram не прошла|сессия telegram устарела|invalid jwt/i.test(text)) {
       return 'Сессия устарела. Закрой мини-приложение и открой его заново через Telegram.';
     }
-    if (status === 503) return 'Сервис временно недоступен. Попробуй ещё раз чуть позже.';
+    if (status === 429) return 'Слишком много попыток подряд. Подожди немного и попробуй снова.';
+    if (status === 503 || status >= 500) return 'На сервере временная проблема. Попробуй ещё раз чуть позже. Если не пройдёт, напиши @merekwi.';
     if (/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(text)) {
       return 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.';
     }
