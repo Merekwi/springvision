@@ -271,7 +271,7 @@
         const file = photoInput.files?.[0];
         if (!file) return;
         photoButton.disabled = true;
-        feedback.textContent = 'Загружаем фото представителя…';
+        feedback.textContent = 'Сохраняем фото…';
         try {
           await window.SpringVisionAPI.requestForm('admin_upload_performer_photo', { seasonId, submissionId: row.id }, 'file', file);
           feedback.textContent = 'Фото сохранено и привязано к заявке.';
@@ -383,11 +383,11 @@
     toast(`ZIP готов: ${files.length} рекапов`);
   };
   const openAdminSection = async (section) => {
-    if (!window.SpringVisionAPI?.configured()) { toast('Система ещё не подключена к базе данных.'); return; }
-    if (!currentIsAdmin) { toast('Нет доступа к админ-панели.'); return; }
+    if (!window.SpringVisionAPI?.configured()) { toast('Сервис сейчас недоступен. Попробуй позже.'); return; }
+    if (!currentIsAdmin) { toast('Нет доступа к этому разделу.'); return; }
     try {
       if (section === 'applications') {
-        showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<div class="season-select-wrap"><button type="button" id="adminAppSeasonTrigger" class="season-select-trigger" aria-expanded="false">Загружаем сезоны… <span>⌄</span></button><div id="adminAppSeasonMenu" class="season-select-menu" hidden></div><select id="adminAppSeason" class="season-select-native" required aria-hidden="true" tabindex="-1"></select></div></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
+        showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<div class="season-select-wrap"><button type="button" id="adminAppSeasonTrigger" class="season-select-trigger" aria-expanded="false">Список сезонов… <span>⌄</span></button><div id="adminAppSeasonMenu" class="season-select-menu" hidden></div><select id="adminAppSeason" class="season-select-native" required aria-hidden="true" tabindex="-1"></select></div></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
         const appSeasons = await fillSeasonSelect($('#adminAppSeason'));
         const seasonTrigger = $('#adminAppSeasonTrigger');
         const seasonMenu = $('#adminAppSeasonMenu');
@@ -493,7 +493,7 @@
           const matrix = $('#adminResultsMatrix');
           const televote = $('#adminResultsTelevote');
           const rankingTitle = $('#adminResultsRankingTitle');
-          note.textContent = 'Загружаем результаты…';
+          note.textContent = 'Получаем результаты…';
           summary.replaceChildren();
           ranking.replaceChildren();
           matrix.replaceChildren();
@@ -829,7 +829,7 @@
           catch(error){out.textContent=error.message||'Не удалось изменить роль.';}
         });
       } else if (section === 'notifications') {
-        showAdminDialog('Центр уведомлений',`<form id="adminNotificationForm" class="admin-form"><label>Аудитория<select id="notifyAudience"><option value="all">Все пользователи</option><option value="participants">Участники сезона</option><option value="jury">Жюри сезона</option><option value="unvoted_jury">Жюри, которое ещё не голосовало</option></select></label><label>Сезон<select id="notifySeason"></select></label><label>Заголовок<input id="notifyTitle" maxlength="120" required></label><label>Сообщение<textarea id="notifyMessage" maxlength="4000" rows="4" required></textarea></label><button type="submit" class="button">Отправить уведомление</button><p id="notifyStatus" class="admin-message" role="status"></p><small>Telegram не позволяет написать пользователям, которые никогда не запускали бота.</small></form><section class="admin-form" style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)"><h3>Восстановление фотографий жюри · сезон №5</h3><p>Одноразовая рассылка извинения и персональных ссылок всем 12 действующим членам жюри, включая тех, у кого фото уже отображается.</p><button type="button" id="juryPhotoDispatchButton" class="button">Отправить запрос фотографий всем 12 членам жюри</button><p id="juryPhotoDispatchStatus" class="admin-message" role="status"></p></section>`);
+        showAdminDialog('Центр уведомлений',`<form id="adminNotificationForm" class="admin-form"><label>Аудитория<select id="notifyAudience"><option value="all">Все пользователи</option><option value="participants">Участники сезона</option><option value="jury">Жюри сезона</option><option value="unvoted_jury">Жюри, которое ещё не голосовало</option></select></label><label>Сезон<select id="notifySeason"></select></label><label>Заголовок<input id="notifyTitle" maxlength="120" required></label><label>Сообщение<textarea id="notifyMessage" maxlength="4000" rows="4" required></textarea></label><button type="submit" class="button">Отправить уведомление</button><p id="notifyStatus" class="admin-message" role="status"></p><small>Telegram не позволяет написать пользователям, которые никогда не запускали бота.</small></form>`);
         await fillSeasonSelect($('#notifySeason'),'Выбери сезон (если нужен)');
         $('#adminNotificationForm').addEventListener('submit',async event=>{
           event.preventDefault(); const out=$('#notifyStatus');
@@ -837,53 +837,7 @@
           catch(error){out.textContent=error.message||'Ошибка отправки.';}
         });
 
-        const photoDispatchButton = $('#juryPhotoDispatchButton');
-        const photoDispatchStatus = $('#juryPhotoDispatchStatus');
-        if (photoDispatchButton && photoDispatchStatus) {
-          const originalLabel = photoDispatchButton.textContent;
-          photoDispatchButton.addEventListener('click', async () => {
-            if (photoDispatchButton.dataset.running === '1') return;
-            photoDispatchButton.dataset.running = '1';
-            photoDispatchButton.disabled = true;
-            photoDispatchButton.textContent = 'Отправляем сообщения…';
-            photoDispatchStatus.textContent = 'Создаём персональные ссылки и отправляем сообщения жюри.';
-            try {
-              const result = await window.SpringVisionAPI.request('admin_send_jury_photo_requests');
-              const sent = Number(result.sent || 0);
-              const total = Number(result.total || 0);
-              const failed = Number(result.failed || 0);
-              photoDispatchStatus.textContent = `Доставлено: ${sent} из ${total}. Ошибок доставки: ${failed}.`;
-              if (result.complete === true && total > 0 && sent >= total) {
-                photoDispatchStatus.textContent += ' Рассылка завершена.';
-                photoDispatchButton.remove();
-              } else {
-                photoDispatchButton.disabled = false;
-                photoDispatchButton.textContent = 'Повторить отправку недоставленных';
-              }
-            } catch (error) {
-              photoDispatchStatus.textContent = error?.message || 'Не удалось выполнить рассылку.';
-              photoDispatchButton.disabled = false;
-              photoDispatchButton.textContent = originalLabel;
-            } finally {
-              photoDispatchButton.dataset.running = '0';
-            }
-          });
 
-          try {
-            const status = await window.SpringVisionAPI.request('admin_photo_dispatch_status');
-            const sent = Number(status.sent || 0);
-            const total = Number(status.total || 0);
-            if (status.complete === true && total > 0 && sent >= total) {
-              photoDispatchStatus.textContent = `Рассылка уже выполнена: доставлено ${sent} из ${total}.`;
-              photoDispatchButton.remove();
-            } else if (sent > 0) {
-              photoDispatchStatus.textContent = `Уже доставлено: ${sent} из ${total}. При нажатии будут отправлены только недоставленные сообщения.`;
-              photoDispatchButton.textContent = 'Отправить оставшиеся сообщения';
-            }
-          } catch (error) {
-            photoDispatchStatus.textContent = error?.message || 'Не удалось проверить состояние рассылки.';
-          }
-        }
       }
     } catch(error) { adminError(error); }
   };
@@ -899,13 +853,20 @@
     const performerPhoto = $('#performerPhotoInput').files[0];
     const message = $('#applicationMessage');
     if (!countryCode || !artist || !songTitle || !performanceUrl || !file || !performerPhoto) { message.textContent = 'Заполни все поля и обязательно загрузи фото исполнителя.'; return; }
-    if (!performerPhoto.type.startsWith('image/')) { message.textContent = 'Фото исполнителя должно быть изображением.'; return; }
-    if (performerPhoto.size > 10 * 1024 * 1024) { message.textContent = 'Фото исполнителя больше 10 МБ.'; return; }
+    if (!performerPhoto.size || !['image/jpeg','image/png','image/webp'].includes(performerPhoto.type)) {
+      message.textContent = 'Фото: JPG, PNG или WebP, до 10 МБ.';
+      return;
+    }
+    if (performerPhoto.size > 10 * 1024 * 1024) { message.textContent = 'Фото больше 10 МБ.'; return; }
     let parsed;
     try { parsed = new URL(performanceUrl); } catch { message.textContent = 'Проверь ссылку: она должна быть корректным URL.'; return; }
     if (!['http:','https:'].includes(parsed.protocol)) { message.textContent = 'Разрешены только ссылки http:// и https://.'; return; }
-    if (file.size > 50 * 1024 * 1024) { message.textContent = 'Файл больше 50 МБ.'; return; }
-    if (!file.type.startsWith('video/')) { message.textContent = 'Выбери видеофайл.'; return; }
+    if (!file.size) { message.textContent = 'Видеофайл пустой.'; return; }
+    if (file.size > 50 * 1024 * 1024) { message.textContent = 'Видео больше 50 МБ.'; return; }
+    if (!['video/mp4','video/webm','video/quicktime'].includes(file.type)) {
+      message.textContent = 'Подходит видео в формате MP4, WebM или MOV.';
+      return;
+    }
     if (!window.SpringVisionAPI?.configured()) {
       message.textContent = 'Система временно недоступна: сервер конкурса ещё не настроен. Заявка не отправлена.';
       toast('Заявка не отправлена');
