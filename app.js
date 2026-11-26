@@ -59,9 +59,13 @@
     const code = countryCodeFromEmoji(flag);
     return `assets/flags/heart/${code === 'xk' ? 'xk' : code}.svg`;
   };
-  const sortedCountries = countries
-    .map(([flag, name]) => ({ flag, name, code: countryCodeFromEmoji(flag) }))
-    .sort((a,b) => a.name.localeCompare(b.name, 'ru'));
+  const uniqueCountries = [...new Map(countries.map(([flag, name]) => {
+    const code = countryCodeFromEmoji(flag);
+    return [code, { flag, name, code }];
+  })).values()];
+  const sortedCountries = uniqueCountries.sort((a,b) => a.name.localeCompare(b.name, 'ru'));
+  const countryCountLabel = $('#countryCount');
+  if (countryCountLabel) countryCountLabel.textContent = String(uniqueCountries.length);
   sortedCountries.forEach(({name,code}) => {
     const option = document.createElement('option');
     option.value = code;
@@ -148,7 +152,7 @@
   };
   const openDialog = (id) => { const dialog = document.getElementById(id); if (dialog && !dialog.open) dialog.showModal(); };
   $$('[data-close]').forEach(button => button.addEventListener('click', () => document.getElementById(button.dataset.close)?.close()));
-  $('#accountButton').addEventListener('click', () => { openDialog('accountDialog'); loadAccount().catch(error => { $('#accountContent').textContent = error.message || 'Не удалось загрузить профиль.'; }); });
+  $('#accountButton').addEventListener('click', () => { openDialog('accountDialog'); loadAccount().catch(error => { $('#accountContent').textContent = error.message || 'Не получилось открыть профиль. Попробуй ещё раз.'; }); });
   const formatMoscowDateTime = (value) => value
     ? new Date(value).toLocaleString('ru-RU', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow' })
     : '';
@@ -208,7 +212,7 @@
     adminContent().innerHTML = markup;
     openDialog('adminDialog');
   };
-  const adminError = (error) => toast(error instanceof Error ? error.message : 'Не удалось выполнить действие.');
+  const adminError = (error) => toast(error instanceof Error ? error.message : 'Не получилось. Попробуй ещё раз.');
   const loadAdminApplications = async () => {
     const seasonId = await selectedSeason('#adminAppSeason');
     const result = await window.SpringVisionAPI.request('admin_list_submissions', { seasonId });
@@ -435,7 +439,7 @@
           const out = $('#voteStatusSummary');
           const juryList = $('#voteStatusJury');
           const televote = $('#voteStatusTelevote');
-          out.textContent = 'Загружаем статус голосования…';
+          out.textContent = 'Получаем статус…';
           juryList.replaceChildren();
           televote.replaceChildren();
           const result = await window.SpringVisionAPI.request('admin_vote_status', { seasonId });
@@ -919,7 +923,7 @@
       await window.SpringVisionAPI.requestForm('submit_application', {
         seasonId: currentSeason.id, countryCode, artist, songTitle, performanceUrl
       }, [{ name: 'recap', file }, { name: 'performerPhoto', file: performerPhoto }]);
-      message.textContent = 'Заявка отправлена на модерацию. Страна зарезервирована за вашей заявкой.';
+      message.textContent = 'Готово! Заявка отправлена. Её статус можно проверить в личном кабинете.';
       toast('Заявка отправлена');
       $('#applicationForm').reset();
       loadAppState();
@@ -935,7 +939,7 @@
     const content = $('#accountContent');
     content.replaceChildren();
     const loading = document.createElement('p');
-    loading.textContent = 'Загружаем профиль, заявки и резервации…';
+    loading.textContent = 'Открываем профиль…';
     content.append(loading);
     const [me, mine, reservationState] = await Promise.all([
       window.SpringVisionAPI.request('me'),
@@ -1087,18 +1091,18 @@
     const subtitle = section.querySelector('.section-subtitle');
     if (drawOnly) {
       heading.textContent = 'Результаты жеребьёвки';
-      subtitle.textContent = 'Порядок выступления опубликован. До начала конкурса показаны только страны.';
+      subtitle.textContent = 'Порядок выступлений уже опубликован.';
       $('#recapCount').textContent = `${approved.length} стран`;
     } else {
       heading.textContent = 'Рекапы конкурса';
-      subtitle.textContent = 'Ролики отображаются по порядку жеребьёвки — без склейки в единый видеофайл.';
+      subtitle.textContent = 'Выступления участников по порядку жеребьёвки.';
       $('#recapCount').textContent = `${approved.length} роликов`;
     }
     list.replaceChildren();
     if (!approved.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.innerHTML = drawOnly ? '<div class="empty-icon">♡</div><h3>Нет опубликованных стран</h3><p>После публикации жеребьёвки здесь появится порядок выступления.</p>' : '<div class="empty-icon">▷</div><h3>Рекапы появятся здесь</h3><p>Утверждённые рекапы будут показаны по порядку жеребьёвки после публикации.</p>';
+      empty.innerHTML = drawOnly ? '<div class="empty-icon">♡</div><h3>Участники пока не опубликованы</h3><p>Список появится после публикации жеребьёвки.</p>' : '<div class="empty-icon">▷</div><h3>Выступлений пока нет</h3><p>Видео появятся после публикации жеребьёвки.</p>';
       list.append(empty);
       return;
     }
@@ -1470,9 +1474,11 @@
   async function loadAppState() {
     if (stateLoading) return;
     if (!window.SpringVisionAPI?.configured()) {
-      $('#seasonStatus').textContent = 'Сервер не подключён';
-      $('#seasonCardName').textContent = 'Сезон загружается после подключения сервера';
-      $('#seasonProgressLabel').textContent = 'Ожидание подключения';
+      $('#seasonStatus').textContent = 'Нет связи';
+      $('#seasonTitle').textContent = 'SpringVision';
+      $('#seasonCardName').textContent = 'Сезон временно недоступен';
+      $('#seasonDescription').textContent = 'Не получилось подключиться к серверу. Попробуй обновить приложение.';
+      $('#seasonProgressLabel').textContent = 'Нет соединения';
       $('#applyButton').disabled = true;
       $('#voting').hidden = true;
       renderRecaps([]);
@@ -1499,9 +1505,21 @@
       currentSeason = state.season;
       reservedCountryCodes = new Set(state.reservedCountryCodes || []);
       currentCountryReservation = state.countryReservation || null;
-      $('#seasonStatus').textContent = statusLabels[currentSeason.status] || currentSeason.status;
+      const registrationStartsAt = currentSeason.registration_opens_at ? Date.parse(currentSeason.registration_opens_at) : NaN;
+      const registrationEndsAt = currentSeason.registration_closes_at ? Date.parse(currentSeason.registration_closes_at) : NaN;
+      const hasRegistrationWindow = Number.isFinite(registrationStartsAt) &&
+        Number.isFinite(registrationEndsAt) && registrationEndsAt > registrationStartsAt;
+      const now = Date.now();
+      const canApplyNow = currentSeason.status === 'registration' && hasRegistrationWindow &&
+        now >= registrationStartsAt && now <= registrationEndsAt;
+      const registrationUpcoming = currentSeason.status === 'registration' && hasRegistrationWindow &&
+        now < registrationStartsAt;
+      const currentStatusLabel = currentSeason.status === 'registration'
+        ? (canApplyNow ? 'Приём заявок открыт' : registrationUpcoming ? 'Скоро откроется' : 'Приём заявок закрыт')
+        : (statusLabels[currentSeason.status] || currentSeason.status);
+      $('#seasonStatus').textContent = currentStatusLabel;
       const progress = ({draft:5,registration:20,moderation:35,drawn:50,jury_voting:65,televoting:80,finished:100,archived:100})[currentSeason.status] || 0;
-      $('#seasonProgressLabel').textContent = statusLabels[currentSeason.status] || currentSeason.status;
+      $('#seasonProgressLabel').textContent = currentStatusLabel;
       $('#seasonProgressBar').style.width = `${progress}%`;
       $('#seasonTitle').textContent = currentSeason.title;
       const seasonLogo = $('#seasonLogo');
@@ -1513,20 +1531,34 @@
         seasonLogo.hidden = true;
         seasonLogo.removeAttribute('src');
       }
-      $('#seasonCardName').textContent = `SpringVision ${String(currentSeason.season_number).padStart(2,'0')}`;
-      $('#seasonDescription').textContent = currentSeason.description || 'Участвуй в сезоне SpringVision: заявка, рекапы, жюри и результаты.';
+      $('#seasonCardName').textContent = currentSeason.title || `SpringVision ${String(currentSeason.season_number).padStart(2,'0')}`;
+      const stageDescriptions = {
+        draft: 'Организаторы готовят конкурс. Следи за обновлениями.',
+        moderation: 'Организаторы проверяют заявки. Следующий этап появится здесь.',
+        drawn: 'Жеребьёвка опубликована. Смотри порядок выступлений ниже.',
+        jury_voting: 'Идёт голосование жюри. Выставь баллы в разделе голосования.',
+        televoting: 'Открыто телеголосование. Поддержи участников.',
+        finished: 'Конкурс завершён. Выступления и результаты собраны ниже.',
+        archived: 'Архив сезона: выступления и результаты.'
+      };
+      const registrationDescription = canApplyNow
+        ? `Приём заявок до ${formatMoscowDateTime(currentSeason.registration_closes_at)} МСК. Подготовь песню, ссылку, фото исполнителя и 30-секундный рекап.`
+        : registrationUpcoming
+          ? `Регистрация откроется ${formatMoscowDateTime(currentSeason.registration_opens_at)} МСК.`
+          : 'Приём заявок закрыт. Следи здесь за жеребьёвкой, выступлениями и голосованием.';
+      $('#seasonDescription').textContent = currentSeason.description ||
+        (currentSeason.status === 'registration' ? registrationDescription : (stageDescriptions[currentSeason.status] || 'Все новости и этапы конкурса будут здесь.'));
       const deadlineRows = [
-        ['Начало регистрации', currentSeason.registration_opens_at],
-        ['Дедлайн регистрации', currentSeason.registration_closes_at],
-        ['Дедлайн голосования жюри', currentSeason.jury_deadline],
-        ['Дедлайн телеголосования', currentSeason.televote_deadline],
-        ['Дата конкурса', currentSeason.contest_at],
-      ].filter(([,value]) => value);
+        [registrationUpcoming ? 'Регистрация откроется' : 'Заявки до', registrationUpcoming ? currentSeason.registration_opens_at : currentSeason.registration_closes_at],
+        ['Голосование жюри до', currentSeason.jury_deadline],
+        ['Телеголосование до', currentSeason.televote_deadline],
+        ['Дата финала', currentSeason.contest_at],
+      ].filter(([,value]) => value && Number.isFinite(Date.parse(value)));
       const deadlinesBox = $('#seasonDeadlines');
       deadlinesBox.replaceChildren();
       if (deadlineRows.length) {
         const heading = document.createElement('strong');
-        heading.textContent = 'Расписание и дедлайны';
+        heading.textContent = 'Важные даты';
         deadlinesBox.append(heading);
         const list = document.createElement('div');
         list.className = 'season-deadlines-list';
@@ -1544,8 +1576,8 @@
         deadlinesBox.append(list);
         deadlinesBox.hidden = false;
       } else deadlinesBox.hidden = true;
-      $('#applyButton').disabled = currentSeason.status !== 'registration';
-      $('#applyButton').textContent = currentSeason.status === 'registration' ? 'Подать заявку →' : 'Регистрация закрыта';
+      $('#applyButton').disabled = !canApplyNow;
+      $('#applyButton').textContent = canApplyNow ? 'Подать заявку →' : registrationUpcoming ? 'Скоро откроется' : 'Приём заявок закрыт';
       renderCountryOptions(countrySearch.value);
       renderRecaps(state.submissions || [], currentSeason);
       renderVoting(state);
@@ -1553,7 +1585,7 @@
       if (state.isAdmin) $('#admin').hidden = false;
     } catch (error) {
       $('#seasonStatus').textContent = 'Нет соединения с сервером';
-      toast(error instanceof Error ? error.message : 'Не удалось загрузить SpringVision.');
+      toast(error instanceof Error ? error.message : 'Не получилось загрузить конкурс. Обнови приложение.');
     } finally {
       stateLoading = false;
     }
@@ -1568,7 +1600,7 @@
   });
 
   if (window.SpringVisionAPI?.configured()) {
-    $('#seasonStatus').textContent = 'Подключаемся…';
+    $('#seasonStatus').textContent = 'Открываем сезон…';
     loadAppState();
   } else {
     $('#seasonStatus').textContent = 'Сервер не подключён';
