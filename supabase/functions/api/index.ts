@@ -248,7 +248,7 @@ async function saveSpringVisionArchiveSnapshot(db: any, seasonId: string) {
     ...row,
     placement: finalAvailable ? index + 1 : null,
   }));
-  const standingsById = new Map(standings.map((row: any) => [row.submission_id, row]));
+  const standingsById = new Map<string, any>(standings.map((row: any) => [String(row.submission_id), row] as [string, any]));
   const entries = submissions.map((row: any) => {
     const ranking = standingsById.get(String(row.id));
     return {
