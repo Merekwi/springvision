@@ -185,6 +185,120 @@ async function runJuryCron(db: any, botToken: string) {
   return json({ok:true,remindersSent,remindersFailed,randomBallots,closedSeasons,disqualifiedCorrections});
 }
 
+
+async function saveSpringVisionArchiveSnapshot(db: any, seasonId: string) {
+  const [seasonResult, submissionsResult, juryVotesResult, ballotsResult] = await Promise.all([
+    db.from("seasons").select("id,season_number,title,logo_url,description,status,contest_at,overall_results_published,jury_voting_open,televote_open,recording_storage_path,combined_recap_storage_path,twitch_url,twitch_published,recording_published").eq("id", seasonId).maybeSingle(),
+    db.from("submissions").select("id,country_code,artist,song_title,performance_url,recap_storage_path,performer_photo_storage_path,status,performance_order,created_at,countries(name)").eq("season_id", seasonId).order("created_at", { ascending: true }),
+    db.from("jury_votes").select("target_submission_id,points").eq("season_id", seasonId),
+    db.from("televote_ballots").select("id").eq("season_id", seasonId),
+  ]);
+  if (seasonResult.error || !seasonResult.data) throw new Error("Сезон для архива не найден.");
+  if (submissionsResult.error) throw new Error("Не удалось прочитать заявки для архива: " + submissionsResult.error.message);
+  if (juryVotesResult.error) throw new Error("Не удалось прочитать оценки жюри для архива: " + juryVotesResult.error.message);
+  if (ballotsResult.error) throw new Error("Не удалось прочитать телеголосование для архива: " + ballotsResult.error.message);
+
+  const season = seasonResult.data;
+  const submissions = submissionsResult.data || [];
+  const participants = submissions.filter((row: any) => row.status === "approved");
+  const juryTotals = new Map<string, number>();
+  for (const vote of juryVotesResult.data || []) {
+    const id = String(vote.target_submission_id);
+    juryTotals.set(id, (juryTotals.get(id) || 0) + Number(vote.points || 0));
+  }
+
+  const ballotIds = (ballotsResult.data || []).map((row: any) => row.id);
+  let televoteRows: any[] = [];
+  if (ballotIds.length) {
+    const pointsResult = await db.from("televote_points").select("target_submission_id,points").in("ballot_id", ballotIds);
+    if (pointsResult.error) throw new Error("Не удалось рассчитать телеголосование для архива: " + pointsResult.error.message);
+    televoteRows = pointsResult.data || [];
+  }
+  const televoteTotals = new Map<string, number>();
+  for (const vote of televoteRows) {
+    const id = String(vote.target_submission_id);
+    televoteTotals.set(id, (televoteTotals.get(id) || 0) + Number(vote.points || 0));
+  }
+
+  const countryName = (row: any) => {
+    const relation = Array.isArray(row.countries) ? row.countries[0] : row.countries;
+    return relation?.name || String(row.country_code || "").toUpperCase();
+  };
+  const finalAvailable = ["finished", "archived"].includes(season.status)
+    && !season.jury_voting_open && !season.televote_open;
+  const standingsBase = participants.map((row: any) => {
+    const juryPoints = juryTotals.get(String(row.id)) || 0;
+    const televotePoints = televoteTotals.get(String(row.id)) || 0;
+    return {
+      submission_id: String(row.id),
+      country_code: row.country_code,
+      country_name: countryName(row),
+      artist: row.artist,
+      song_title: row.song_title,
+      performance_url: row.performance_url,
+      recap_storage_path: row.recap_storage_path,
+      performer_photo_storage_path: row.performer_photo_storage_path,
+      performance_order: row.performance_order,
+      jury_points: juryPoints,
+      televote_points: televotePoints,
+      total_points: juryPoints + televotePoints,
+    };
+  }).sort((a: any, b: any) => b.total_points - a.total_points || a.country_name.localeCompare(b.country_name, "ru"));
+  const standings = standingsBase.map((row: any, index: number) => ({
+    ...row,
+    placement: finalAvailable ? index + 1 : null,
+  }));
+  const standingsById = new Map(standings.map((row: any) => [row.submission_id, row]));
+  const entries = submissions.map((row: any) => {
+    const ranking = standingsById.get(String(row.id));
+    return {
+      submission_id: String(row.id),
+      country_code: row.country_code,
+      country_name: countryName(row),
+      artist: row.artist,
+      song_title: row.song_title,
+      performance_url: row.performance_url,
+      recap_storage_path: row.recap_storage_path,
+      performer_photo_storage_path: row.performer_photo_storage_path,
+      status: row.status,
+      performance_order: row.performance_order,
+      created_at: row.created_at,
+      placement: ranking?.placement ?? null,
+      jury_points: ranking?.jury_points ?? 0,
+      televote_points: ranking?.televote_points ?? 0,
+      total_points: ranking?.total_points ?? 0,
+    };
+  });
+
+  const now = new Date().toISOString();
+  const snapshot = {
+    source_season_id: season.id,
+    season_number: season.season_number,
+    season_title: season.title,
+    logo_url: season.logo_url,
+    description: season.description,
+    season_status: season.status,
+    contest_at: season.contest_at,
+    recording_storage_path: season.recording_storage_path,
+    combined_recap_storage_path: season.combined_recap_storage_path,
+    twitch_url: season.twitch_url,
+    twitch_published: Boolean(season.twitch_published),
+    recording_published: Boolean(season.recording_published),
+    is_public: Boolean(finalAvailable && season.overall_results_published),
+    archived_at: now,
+    updated_at: now,
+    entry_count: entries.length,
+    participant_count: participants.length,
+    entries,
+    standings,
+  };
+  const saved = await db.from("springvision_archive_seasons")
+    .upsert(snapshot, { onConflict: "source_season_id" })
+    .select("*").single();
+  if (saved.error) throw new Error("Не удалось сохранить снимок архива: " + saved.error.message);
+  return saved.data;
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Используйте POST." }, 405);
@@ -947,6 +1061,67 @@ ${link}
         return json({ ok: true, reservation: inserted.data, targetSeason });
       }
 
+
+      case "public_archive": {
+        const result = await db.from("springvision_archive_seasons").select("*")
+          .eq("is_public", true).order("season_number", { ascending: true });
+        if (result.error) throw new Error("Не удалось загрузить архив SpringVision.");
+        const signPath = async (path: unknown) => {
+          if (typeof path !== "string" || !path.trim()) return null;
+          const signed = await db.storage.from(BUCKET).createSignedUrl(path, 3600);
+          if (signed.error) {
+            console.error("Could not sign archive media URL:", path, signed.error);
+            return null;
+          }
+          return signed.data?.signedUrl || null;
+        };
+        const archives = await Promise.all((result.data || []).map(async (season: any) => {
+          const logoUrl = typeof season.logo_url === "string" && season.logo_url.startsWith("storage:")
+            ? await signPath(season.logo_url.slice("storage:".length)) : season.logo_url;
+          const standings = await Promise.all((Array.isArray(season.standings) ? season.standings : []).map(async (entry: any) => ({
+            ...entry,
+            recap_url: await signPath(entry.recap_storage_path),
+            performer_photo_url: await signPath(entry.performer_photo_storage_path),
+          })));
+          return {
+            season_number: season.season_number,
+            season_title: season.season_title,
+            logo_url: logoUrl,
+            description: season.description,
+            contest_at: season.contest_at,
+            recording_url: season.recording_published ? await signPath(season.recording_storage_path) : null,
+            combined_recap_url: await signPath(season.combined_recap_storage_path),
+            twitch_url: season.twitch_published ? season.twitch_url : null,
+            archived_at: season.archived_at,
+            participant_count: season.participant_count,
+            standings,
+          };
+        }));
+        return json({ archives });
+      }
+
+      case "admin_archive_list": {
+        requireAdmin();
+        const result = await db.from("springvision_archive_seasons").select("*")
+          .order("season_number", { ascending: false });
+        if (result.error) throw new Error("Не удалось загрузить служебный архив: " + result.error.message);
+        return json({ archives: result.data || [] });
+      }
+
+      case "admin_archive_save": {
+        requireAdmin();
+        const seasonId = String(body.seasonId || "");
+        if (!seasonId) throw new Error("Не выбран сезон для архива.");
+        const archived = await saveSpringVisionArchiveSnapshot(db, seasonId);
+        await writeAudit("season_archive_saved", "season", seasonId, {
+          season_number: archived.season_number,
+          entries: archived.entry_count,
+          participants: archived.participant_count,
+          public: archived.is_public,
+        });
+        return json({ ok: true, archive: archived });
+      }
+
       case "my_submissions": {
         const result = await db.from("submissions").select("id,season_id,country_code,artist,song_title,status,moderation_comment,created_at,seasons(title,season_number)")
           .eq("user_id", profile.id).order("created_at", { ascending: false });
@@ -1410,7 +1585,18 @@ ${link}
           await db.from("season_jury").update({revoked_at:new Date().toISOString()}).eq("season_id",seasonId).is("revoked_at",null);
         }
         await writeAudit("season_settings_updated", "season", seasonId, patch);
-        return json({ season: result.data });
+        let archiveSaved = false;
+        let archiveWarning: string | null = null;
+        if (["finished", "archived"].includes(result.data.status) || result.data.overall_results_published === true) {
+          try {
+            await saveSpringVisionArchiveSnapshot(db, seasonId);
+            archiveSaved = true;
+          } catch (archiveError) {
+            archiveWarning = archiveError instanceof Error ? archiveError.message : "Не удалось обновить архив.";
+            console.error("Season settings saved, but archive snapshot failed:", seasonId, archiveError);
+          }
+        }
+        return json({ season: result.data, archiveSaved, archiveWarning });
       }
 
       case "admin_close_jury": {
@@ -1470,6 +1656,8 @@ ${link}
         if (seasonResult.error || !seasonResult.data) throw new Error("Сезон не найден.");
         const season = seasonResult.data;
         if (confirmTitle !== season.title) throw new Error("Название сезона не совпадает. Удаление отменено.");
+        // Save every submitted entry before cascading season data is removed.
+        const archiveSnapshot = await saveSpringVisionArchiveSnapshot(db, seasonId);
         const submissionsResult = await db.from("submissions")
           .select("recap_storage_path,performer_photo_storage_path").eq("season_id", seasonId);
         if (submissionsResult.error) throw new Error("Не удалось подготовить файлы сезона к удалению: " + submissionsResult.error.message);
@@ -1485,17 +1673,16 @@ ${link}
         const removed = await db.from("seasons").delete().eq("id", seasonId).select("id").maybeSingle();
         if (removed.error) throw new Error("Не удалось удалить сезон: " + removed.error.message);
         if (!removed.data) throw new Error("Сезон уже был удалён.");
-        let storageWarning: string | null = null;
         const filePaths = [...paths];
-        if (filePaths.length) {
-          const storageResult = await db.storage.from(BUCKET).remove(filePaths);
-          if (storageResult.error) {
-            storageWarning = storageResult.error.message;
-            console.error("Season removed, but storage cleanup failed:", seasonId, storageResult.error);
-          }
-        }
-        await writeAudit("season_deleted", "season", seasonId, { season_number: season.season_number, title: season.title, storage_files: filePaths.length });
-        return json({ ok: true, storageWarning });
+        // Archive media is intentionally retained so historical recaps and photos keep working.
+        await writeAudit("season_deleted", "season", seasonId, {
+          season_number: season.season_number,
+          title: season.title,
+          archive_snapshot_saved: true,
+          archive_public: Boolean(archiveSnapshot.is_public),
+          storage_files_retained: filePaths.length,
+        });
+        return json({ ok: true, storageRetained: filePaths.length, archivePublic: Boolean(archiveSnapshot.is_public) });
       }
 
       case "admin_draw": {
