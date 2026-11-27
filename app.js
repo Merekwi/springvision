@@ -39,6 +39,8 @@
   let currentCountryReservation = null;
   let stateLoading = false;
   let lastStateLoadedAt = 0;
+  let lastArchiveLoadedAt = 0;
+  let archiveLoading = false;
   const POINTS = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
   const countries = [
     ['🇦🇱','Албания'],['🇦🇩','Андорра'],['🇦🇲','Армения'],['🇦🇹','Австрия'],['🇦🇿','Азербайджан'],['🇧🇾','Беларусь'],['🇧🇪','Бельгия'],['🇧🇦','Босния и Герцеговина'],['🇧🇬','Болгария'],['🇭🇷','Хорватия'],['🇨🇾','Кипр'],['🇨🇿','Чехия'],['🇩🇰','Дания'],['🇪🇪','Эстония'],['🇫🇮','Финляндия'],['🇫🇷','Франция'],['🇬🇪','Грузия'],['🇩🇪','Германия'],['🇬🇷','Греция'],['🇭🇺','Венгрия'],['🇮🇸','Исландия'],['🇮🇪','Ирландия'],['🇮🇱','Израиль'],['🇮🇹','Италия'],['🇰🇿','Казахстан'],['🇽🇰','Косово'],['🇱🇻','Латвия'],['🇱🇹','Литва'],['🇱🇺','Люксембург'],['🇲🇹','Мальта'],['🇲🇩','Молдова'],['🇲🇨','Монако'],['🇲🇪','Черногория'],['🇲🇦','Марокко'],['🇳🇱','Нидерланды'],['🇲🇰','Северная Македония'],['🇳🇴','Норвегия'],['🇵🇱','Польша'],['🇵🇹','Португалия'],['🇷🇴','Румыния'],['🇷🇺','Россия'],['🇸🇲','Сан-Марино'],['🇷🇸','Сербия'],['🇸🇰','Словакия'],['🇸🇮','Словения'],['🇪🇸','Испания'],['🇸🇪','Швеция'],['🇨🇭','Швейцария'],['🇹🇷','Турция'],['🇺🇦','Украина'],['🇬🇧','Великобритания'],['🇺🇸','США'],['🇨🇦','Канада'],['🇦🇺','Австралия'],['🇳🇿','Новая Зеландия'],['🇯🇵','Япония'],['🇰🇷','Южная Корея'],['🇨🇳','Китай'],['🇮🇳','Индия'],['🇧🇷','Бразилия'],['🇦🇷','Аргентина'],['🇲🇽','Мексика'],['🇨🇱','Чили'],['🇿🇦','ЮАР'],['🇪🇬','Египет'],['🇹🇳','Тунис'],['🇩🇿','Алжир'],['🇲🇦','Марокко'],['🇹🇭','Таиланд'],['🇻🇳','Вьетнам'],['🇮🇩','Индонезия'],['🇵🇭','Филиппины'],['🇸🇬','Сингапур'],['🇲🇾','Малайзия'],['🇸🇦','Саудовская Аравия'],['🇦🇪','ОАЭ'],['🇶🇦','Катар'],['🇯🇴','Иордания'],['🇱🇧','Ливан'],['🇵🇰','Пакистан'],['🇧🇩','Бангладеш'],['🇳🇵','Непал'],['🇱🇰','Шри-Ланка'],['🇮🇷','Иран'],['🇮🇶','Ирак'],['🇦🇫','Афганистан'],['🇺🇿','Узбекистан'],['🇰🇬','Кыргызстан'],['🇹🇯','Таджикистан'],['🇹🇲','Туркменистан'],['🇲🇳','Монголия'],['🇰🇪','Кения'],['🇳🇬','Нигерия'],['🇬🇭','Гана'],['🇪🇹','Эфиопия'],['🇹🇿','Танзания'],['🇺🇬','Уганда'],['🇸🇳','Сенегал'],['🇨🇮','Кот-д’Ивуар'],['🇨🇲','Камерун'],['🇨🇩','ДР Конго'],['🇦🇴','Ангола'],['🇲🇿','Мозамбик'],['🇿🇼','Зимбабве'],['🇿🇲','Замбия'],['🇧🇼','Ботсвана'],['🇳🇦','Намибия'],['🇲🇬','Мадагаскар'],['🇲🇺','Маврикий'],['🇸🇨','Сейшелы'],['🇫🇯','Фиджи'],['🇵🇬','Папуа — Новая Гвинея'],['🇸🇧','Соломоновы Острова'],['🇼🇸','Самоа'],['🇹🇴','Тонга'],['🇻🇺','Вануату'],['🇵🇼','Палау'],['🇲🇭','Маршалловы Острова'],['🇰🇮','Кирибати'],['🇹🇻','Тувалу'],['🇳🇷','Науру'],['🇲🇻','Мальдивы'],['🇧🇹','Бутан'],['🇧🇳','Бруней'],['🇰🇭','Камбоджа'],['🇱🇦','Лаос'],['🇲🇲','Мьянма'],['🇹🇱','Восточный Тимор'],['🇧🇴','Боливия'],['🇵🇪','Перу'],['🇪🇨','Эквадор'],['🇨🇴','Колумбия'],['🇻🇪','Венесуэла'],['🇺🇾','Уругвай'],['🇵🇾','Парагвай'],['🇬🇾','Гайана'],['🇸🇷','Суринам'],['🇨🇷','Коста-Рика'],['🇵🇦','Панама'],['🇬🇹','Гватемала'],['🇧🇿','Белиз'],['🇭🇳','Гондурас'],['🇸🇻','Сальвадор'],['🇳🇮','Никарагуа'],['🇨🇺','Куба'],['🇯🇲','Ямайка'],['🇭🇹','Гаити'],['🇩🇴','Доминиканская Республика'],['🇧🇸','Багамы'],['🇧🇧','Барбадос'],['🇹🇹','Тринидад и Тобаго'],['🇬🇩','Гренада'],['🇱🇨','Сент-Люсия'],['🇻🇨','Сент-Винсент и Гренадины'],['🇦🇬','Антигуа и Барбуда'],['🇩🇲','Доминика'],['🇰🇳','Сент-Китс и Невис']
@@ -929,6 +931,157 @@
           try { await window.SpringVisionAPI.request('admin_set_role',{telegramId:Number($('#roleTelegramId').value),role:$('#roleValue').value}); out.textContent='Роль изменена.'; }
           catch(error){out.textContent=error.message||'Не удалось изменить роль.';}
         });
+      } else if (section === 'archive') {
+        showAdminDialog('Исторический архив', '<p class="admin-message">Снимок сохраняет все заявки выбранного сезона, включая отозванные и отклонённые. Итоговые места появятся после завершения сезона и публикации результатов. Снимки обновляются автоматически при завершении или удалении сезона.</p><div class="admin-form-row"><label>Сезон для сохранения<select id="archiveSeasonSelect"></select></label><button type="button" class="button button-small" id="saveArchiveSnapshot">Сохранить снимок</button></div><div class="archive-admin-actions"><button type="button" class="button button-ghost button-small" id="downloadArchiveJSON">Скачать архив JSON</button><button type="button" class="button button-ghost button-small" id="refreshArchiveAdmin">Обновить список</button></div><p id="archiveAdminMessage" class="admin-message" role="status"></p><div id="archiveAdminList" class="archive-admin-list"></div>');
+        const seasonSelect = $('#archiveSeasonSelect');
+        const status = $('#archiveAdminMessage');
+        const saveButton = $('#saveArchiveSnapshot');
+        const downloadButton = $('#downloadArchiveJSON');
+        const refreshButton = $('#refreshArchiveAdmin');
+        const seasons = await fillSeasonSelect(seasonSelect);
+        if (seasons.length) seasonSelect.value = seasons[0].id;
+        else {
+          saveButton.disabled = true;
+          status.textContent = 'В базе пока нет сезонов для сохранения.';
+        }
+
+        const renderArchiveAdminList = (archives) => {
+          const list = $('#archiveAdminList');
+          list.replaceChildren();
+          if (!archives.length) {
+            const empty = document.createElement('p');
+            empty.className = 'archive-empty';
+            empty.textContent = 'Сохранённых снимков пока нет. Выбери сезон и нажми «Сохранить снимок».';
+            list.append(empty);
+            return;
+          }
+          const labels = { approved:'Одобрена', pending:'На проверке', rejected:'Отклонена', withdrawn:'Отозвана' };
+          archives.forEach(archive => {
+            const card = document.createElement('article');
+            card.className = 'archive-admin-season';
+
+            const header = document.createElement('div');
+            header.className = 'archive-admin-season-header';
+            const title = document.createElement('h3');
+            title.textContent = '№' + archive.season_number + ' · ' + archive.season_title;
+            const badge = document.createElement('span');
+            badge.className = 'archive-status';
+            badge.textContent = archive.is_public ? 'Опубликован' : 'Служебный снимок';
+            header.append(title, badge);
+
+            const meta = document.createElement('p');
+            const savedAt = archive.archived_at && Number.isFinite(Date.parse(archive.archived_at))
+              ? new Date(archive.archived_at).toLocaleString('ru-RU')
+              : 'дата неизвестна';
+            meta.textContent = 'Заявок: ' + Number(archive.entry_count || 0)
+              + ' · Одобрено: ' + Number(archive.participant_count || 0)
+              + ' · Снимок: ' + savedAt;
+            card.append(header, meta);
+
+            const entries = Array.isArray(archive.entries) ? archive.entries.slice() : [];
+            entries.sort((a, b) => {
+              const orderA = Number(a.performance_order || 9999);
+              const orderB = Number(b.performance_order || 9999);
+              return orderA - orderB || String(a.country_name || '').localeCompare(String(b.country_name || ''), 'ru');
+            });
+
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = 'Все заявки (' + entries.length + ')';
+            details.append(summary);
+            const entryList = document.createElement('div');
+            entryList.className = 'archive-admin-entries';
+            entries.forEach(entry => {
+              const row = document.createElement('div');
+              row.className = 'archive-admin-entry';
+              const rank = document.createElement('span');
+              rank.textContent = entry.placement ? String(entry.placement) : '—';
+              const copy = document.createElement('div');
+              const name = document.createElement('strong');
+              name.textContent = (entry.country_name || String(entry.country_code || '').toUpperCase())
+                + ' · ' + (entry.artist || 'Исполнитель не указан');
+              const song = document.createElement('small');
+              song.textContent = entry.song_title || 'Название песни не указано';
+              copy.append(name, song);
+              const state = document.createElement('span');
+              state.className = 'archive-status';
+              state.textContent = labels[entry.status] || entry.status || 'Неизвестно';
+              row.append(rank, copy, state);
+              entryList.append(row);
+            });
+            if (!entries.length) {
+              const empty = document.createElement('p');
+              empty.className = 'admin-empty';
+              empty.textContent = 'В этом сезоне не было заявок.';
+              entryList.append(empty);
+            }
+            details.append(entryList);
+            card.append(details);
+            list.append(card);
+          });
+        };
+
+        let archiveCache = [];
+        const refreshArchiveList = async () => {
+          status.textContent = 'Загружаем снимки…';
+          const result = await window.SpringVisionAPI.request('admin_archive_list');
+          archiveCache = result.archives || [];
+          renderArchiveAdminList(archiveCache);
+          status.textContent = archiveCache.length
+            ? 'В архиве сохранено сезонов: ' + archiveCache.length + '.'
+            : 'Архив пока пуст.';
+          return archiveCache;
+        };
+
+        saveButton.addEventListener('click', async () => {
+          if (!seasonSelect.value) {
+            status.textContent = 'Сначала выбери сезон.';
+            return;
+          }
+          saveButton.disabled = true;
+          status.textContent = 'Сохраняем заявки и результаты…';
+          try {
+            const result = await window.SpringVisionAPI.request('admin_archive_save', { seasonId: seasonSelect.value });
+            const saved = result.archive || {};
+            status.textContent = 'Снимок сохранён: ' + Number(saved.entry_count || 0)
+              + ' заявок, ' + Number(saved.participant_count || 0) + ' участников. '
+              + (saved.is_public ? 'Он опубликован.' : 'Пока доступен только организаторам.');
+            await refreshArchiveList();
+          } catch (error) {
+            status.textContent = error instanceof Error ? error.message : 'Не удалось сохранить снимок.';
+          } finally {
+            saveButton.disabled = !seasons.length;
+          }
+        });
+
+        refreshButton.addEventListener('click', () => refreshArchiveList().catch(adminError));
+        downloadButton.addEventListener('click', async () => {
+          downloadButton.disabled = true;
+          try {
+            const result = await window.SpringVisionAPI.request('admin_archive_list');
+            const payload = {
+              exported_at: new Date().toISOString(),
+              format: 'springvision-archive-v1',
+              archives: result.archives || [],
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'SpringVision_archive_' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            status.textContent = 'Экспорт готов: сезонов ' + payload.archives.length + '.';
+          } catch (error) {
+            status.textContent = error instanceof Error ? error.message : 'Не удалось подготовить экспорт.';
+          } finally {
+            downloadButton.disabled = false;
+          }
+        });
+
+        await refreshArchiveList();
       } else if (section === 'notifications') {
         showAdminDialog('Центр уведомлений',`<form id="adminNotificationForm" class="admin-form"><label>Аудитория<select id="notifyAudience"><option value="all">Все пользователи</option><option value="participants">Участники сезона</option><option value="jury">Жюри сезона</option><option value="unvoted_jury">Жюри, которое ещё не голосовало</option></select></label><label>Сезон<select id="notifySeason"></select></label><label>Заголовок<input id="notifyTitle" maxlength="120" required></label><label>Сообщение<textarea id="notifyMessage" maxlength="4000" rows="4" required></textarea></label><button type="submit" class="button">Отправить уведомление</button><p id="notifyStatus" class="admin-message" role="status"></p><small>Telegram не позволяет написать пользователям, которые никогда не запускали бота.</small></form>`);
         await fillSeasonSelect($('#notifySeason'),'Выбери сезон (если нужен)');
@@ -1693,6 +1846,188 @@
     }
   };
 
+
+  const renderPublicArchive = (archives) => {
+    const root = $('#archiveList');
+    if (!root) return;
+    root.replaceChildren();
+    if (!Array.isArray(archives) || !archives.length) {
+      const empty = document.createElement('div');
+      empty.className = 'archive-empty';
+      empty.textContent = 'Архив пока пуст. Итоги сезона появятся здесь после завершения конкурса и публикации результатов.';
+      root.append(empty);
+      return;
+    }
+
+    const addLink = (parent, label, url) => {
+      if (typeof url !== 'string' || !url.trim()) return;
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = label;
+      parent.append(link);
+    };
+
+    archives.forEach(season => {
+      const card = document.createElement('article');
+      card.className = 'archive-season';
+
+      const header = document.createElement('div');
+      header.className = 'archive-season-header';
+
+      if (season.logo_url) {
+        const logo = document.createElement('img');
+        logo.className = 'archive-season-logo';
+        logo.src = season.logo_url;
+        logo.alt = 'Логотип ' + (season.season_title || 'сезона');
+        logo.loading = 'lazy';
+        logo.onerror = () => { logo.hidden = true; };
+        header.append(logo);
+      }
+
+      const heading = document.createElement('div');
+      heading.className = 'archive-season-heading';
+
+      const eyebrow = document.createElement('div');
+      eyebrow.className = 'eyebrow';
+      eyebrow.textContent = 'SPRINGVISION · СЕЗОН №' + String(season.season_number).padStart(2, '0');
+
+      const title = document.createElement('h3');
+      title.textContent = season.season_title || ('Сезон №' + season.season_number);
+
+      const description = document.createElement('p');
+      const dateText = season.contest_at && Number.isFinite(Date.parse(season.contest_at))
+        ? new Date(season.contest_at).toLocaleDateString('ru-RU', { day:'numeric', month:'long', year:'numeric' })
+        : 'Дата финала не указана';
+      description.textContent = dateText + ' · ' + Number(season.participant_count || 0) + ' участников';
+
+      heading.append(eyebrow, title, description);
+      header.append(heading);
+
+      const total = document.createElement('div');
+      total.className = 'archive-season-total';
+      const totalNumber = document.createElement('strong');
+      totalNumber.textContent = String(Number(season.participant_count || 0));
+      const totalLabel = document.createElement('span');
+      totalLabel.textContent = 'участников';
+      total.append(totalNumber, totalLabel);
+      header.append(total);
+      card.append(header);
+
+      if (season.description) {
+        const note = document.createElement('p');
+        note.className = 'archive-season-description';
+        note.textContent = season.description;
+        card.append(note);
+      }
+
+      const standings = Array.isArray(season.standings) ? season.standings : [];
+      const list = document.createElement('div');
+      list.className = 'archive-standings';
+
+      if (!standings.length) {
+        const empty = document.createElement('p');
+        empty.className = 'archive-empty';
+        empty.textContent = 'Итоговая таблица для этого сезона не сохранена.';
+        list.append(empty);
+      } else {
+        standings.forEach(entry => {
+          const row = document.createElement('article');
+          row.className = 'archive-entry';
+
+          const rank = document.createElement('div');
+          rank.className = 'archive-entry-rank';
+          rank.textContent = entry.placement ? String(entry.placement) + ' место' : '—';
+
+          const main = document.createElement('div');
+          main.className = 'archive-entry-main';
+
+          const flag = document.createElement('img');
+          flag.className = 'archive-entry-flag';
+          flag.src = 'assets/flags/heart/' + String(entry.country_code || '').toLowerCase() + '.svg';
+          flag.alt = '';
+          flag.loading = 'lazy';
+          flag.onerror = () => { flag.hidden = true; };
+          main.append(flag);
+
+          if (entry.performer_photo_url) {
+            const photo = document.createElement('img');
+            photo.className = 'archive-entry-photo';
+            photo.src = entry.performer_photo_url;
+            photo.alt = 'Фото представителя ' + (entry.country_name || '');
+            photo.loading = 'lazy';
+            photo.onerror = () => { photo.hidden = true; };
+            main.append(photo);
+          }
+
+          const copy = document.createElement('div');
+          copy.className = 'archive-entry-copy';
+          const country = document.createElement('span');
+          country.className = 'archive-entry-country';
+          country.textContent = entry.country_name || String(entry.country_code || '').toUpperCase();
+          const artist = document.createElement('strong');
+          artist.textContent = entry.artist || 'Исполнитель не указан';
+          const song = document.createElement('small');
+          song.textContent = entry.song_title || 'Название песни не указано';
+          copy.append(country, artist, song);
+          main.append(copy);
+
+          const points = document.createElement('div');
+          points.className = 'archive-entry-points';
+          const pointsTotal = document.createElement('strong');
+          pointsTotal.textContent = String(Number(entry.total_points || 0));
+          const pointsLabel = document.createElement('small');
+          pointsLabel.textContent = 'баллов';
+          const split = document.createElement('small');
+          split.textContent = 'Жюри ' + Number(entry.jury_points || 0) + ' · зрители ' + Number(entry.televote_points || 0);
+          points.append(pointsTotal, pointsLabel, split);
+
+          row.append(rank, main, points);
+
+          const actions = document.createElement('div');
+          actions.className = 'archive-entry-actions';
+          addLink(actions, 'Песня / выступление ↗', entry.performance_url);
+          addLink(actions, '30-секундный рекап ↗', entry.recap_url);
+          if (actions.childElementCount) row.append(actions);
+
+          list.append(row);
+        });
+      }
+      card.append(list);
+
+      const media = document.createElement('div');
+      media.className = 'archive-season-media';
+      addLink(media, 'Общий рекап сезона ↗', season.combined_recap_url);
+      addLink(media, 'Запись финала ↗', season.recording_url);
+      addLink(media, 'Трансляция на Twitch ↗', season.twitch_url);
+      if (media.childElementCount) card.append(media);
+
+      root.append(card);
+    });
+  };
+
+  const loadPublicArchive = async () => {
+    if (archiveLoading || !window.SpringVisionAPI?.configured()) return;
+    archiveLoading = true;
+    try {
+      const result = await window.SpringVisionAPI.request('public_archive');
+      renderPublicArchive(result.archives || []);
+      lastArchiveLoadedAt = Date.now();
+    } catch (error) {
+      const root = $('#archiveList');
+      if (root) {
+        root.replaceChildren();
+        const empty = document.createElement('div');
+        empty.className = 'archive-empty';
+        empty.textContent = 'Не удалось загрузить архив. Обнови страницу чуть позже.';
+        root.append(empty);
+      }
+    } finally {
+      archiveLoading = false;
+    }
+  };
+
   async function loadAppState() {
     if (stateLoading) return;
     if (!window.SpringVisionAPI?.configured()) {
@@ -1817,14 +2152,17 @@
   // Private Storage image links expire. Refresh app state when the Mini App returns after a while.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && Date.now() - lastStateLoadedAt > 45 * 60 * 1000) loadAppState();
+    if (!document.hidden && Date.now() - lastArchiveLoadedAt > 45 * 60 * 1000) loadPublicArchive();
   });
   window.addEventListener('pageshow', () => {
     if (Date.now() - lastStateLoadedAt > 45 * 60 * 1000) loadAppState();
+    if (Date.now() - lastArchiveLoadedAt > 45 * 60 * 1000) loadPublicArchive();
   });
 
   if (window.SpringVisionAPI?.configured()) {
     $('#seasonStatus').textContent = 'Открываем сезон…';
     loadAppState();
+    loadPublicArchive();
   } else {
     $('#seasonStatus').textContent = 'Сервер не подключён';
   }
