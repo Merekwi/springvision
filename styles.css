@@ -778,3 +778,59 @@ html[data-theme="dark"] .hero h1 span{color:transparent}
   opacity: .88;
   cursor: not-allowed;
 }
+
+/* SpringVision historical archive */
+.archive-seasons{display:grid;gap:1.1rem}
+.archive-empty{padding:1.25rem;border:1px dashed var(--line-strong);border-radius:1rem;color:var(--muted);background:var(--surface-card);line-height:1.6}
+.archive-season{overflow:hidden;padding:clamp(1rem,3vw,1.45rem);border:1px solid var(--line);border-radius:1.25rem;background:var(--surface-card);box-shadow:var(--shadow-small);color:var(--text)}
+.archive-season-header{display:flex;align-items:center;gap:1rem;margin-bottom:1rem}
+.archive-season-logo{width:4.25rem;height:4.25rem;flex:0 0 4.25rem;object-fit:contain;border-radius:.9rem;background:var(--surface-raised);padding:.35rem}
+.archive-season-heading{min-width:0;flex:1}
+.archive-season-heading .eyebrow{margin-bottom:.25rem}
+.archive-season-heading h3{margin:0;color:var(--text);font-size:clamp(1.15rem,3vw,1.45rem)}
+.archive-season-heading p{margin:.25rem 0 0;color:var(--muted);font-size:.88rem}
+.archive-season-total{margin-left:auto;text-align:right;color:var(--muted);font-size:.78rem;white-space:nowrap}
+.archive-season-total strong{display:block;color:var(--text);font-size:1.35rem}
+.archive-standings{display:grid;gap:.55rem}
+.archive-entry{display:grid;grid-template-columns:2.4rem minmax(0,1fr) auto;gap:.8rem;align-items:center;padding:.75rem .85rem;border:1px solid var(--line);border-radius:.9rem;background:var(--surface-raised)}
+.archive-entry-rank{font-size:1.05rem;font-weight:800;text-align:center;color:var(--muted)}
+.archive-entry-main{display:flex;align-items:center;gap:.7rem;min-width:0}
+.archive-entry-photo{width:3.3rem;height:3.3rem;flex:0 0 3.3rem;object-fit:cover;border-radius:.7rem;background:var(--surface-inset)}
+.archive-entry-flag{width:1.65rem;height:1.15rem;object-fit:cover;flex:0 0 auto;border-radius:3px}
+.archive-entry-copy{min-width:0;display:grid;gap:.15rem}
+.archive-entry-country{font-size:.78rem;color:var(--muted)}
+.archive-entry-copy strong{overflow-wrap:anywhere;color:var(--text);font-size:.96rem}
+.archive-entry-copy small{overflow-wrap:anywhere;color:var(--muted);font-size:.82rem}
+.archive-entry-points{text-align:right;white-space:nowrap}
+.archive-entry-points strong{display:block;color:var(--text);font-size:1.15rem}
+.archive-entry-points small{display:block;color:var(--muted);font-size:.72rem}
+.archive-entry-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.85rem;padding-left:3.2rem}
+.archive-entry-actions a{font-size:.82rem;color:var(--text-2);text-decoration:underline;text-underline-offset:3px}
+.archive-media-link{display:inline-flex;align-items:center;gap:.3rem}
+.archive-season-media{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line)}
+.archive-season-media a{font-size:.85rem;color:var(--text-2);text-decoration:underline;text-underline-offset:3px}
+.archive-admin-list{display:grid;gap:.7rem;margin-top:1rem}
+.archive-admin-season{padding:1rem;border:1px solid var(--line);border-radius:.9rem;background:var(--surface-card)}
+.archive-admin-season-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.archive-admin-season h3{margin:0 0 .25rem;font-size:1rem}
+.archive-admin-season p{margin:.25rem 0;color:var(--muted);font-size:.84rem;line-height:1.5}
+.archive-admin-season details{margin-top:.7rem}
+.archive-admin-season summary{cursor:pointer;color:var(--text-2);font-size:.88rem}
+.archive-admin-entries{display:grid;gap:.35rem;margin-top:.65rem}
+.archive-admin-entry{display:grid;grid-template-columns:2.2rem minmax(0,1fr) auto;gap:.5rem;align-items:center;padding:.55rem .65rem;background:var(--surface-raised);border-radius:.6rem;font-size:.82rem}
+.archive-admin-entry strong{overflow-wrap:anywhere}
+.archive-admin-entry small{color:var(--muted);text-align:right}
+.archive-admin-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:.75rem 0}
+.archive-status{display:inline-flex;align-items:center;padding:.25rem .55rem;border-radius:999px;background:var(--surface-inset);color:var(--text-2);font-size:.72rem;font-weight:700}
+@media(max-width:560px){
+ .archive-season-header{align-items:flex-start}
+ .archive-season-logo{width:3.2rem;height:3.2rem;flex-basis:3.2rem}
+ .archive-season-total{font-size:.7rem}
+ .archive-entry{grid-template-columns:1.7rem minmax(0,1fr) auto;gap:.5rem;padding:.65rem}
+ .archive-entry-photo{width:2.6rem;height:2.6rem;flex-basis:2.6rem}
+ .archive-entry-main{gap:.5rem}
+ .archive-entry-copy strong{font-size:.88rem}
+ .archive-entry-actions{padding-left:0}
+}
+html[data-theme="spring"] .archive-season,html[data-theme="spring"] .archive-admin-season{background:var(--surface-card);color:var(--text)}
+html[data-theme="dark"] .archive-season,html[data-theme="dark"] .archive-admin-season{background:var(--surface-card);color:var(--text)}
