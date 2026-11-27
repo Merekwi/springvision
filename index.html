@@ -14,12 +14,12 @@
       }
     } catch (_) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261127-polish-1">
+  <link rel="stylesheet" href="styles.css?v=20261127-archive-1">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="config.js?v=20261024-6"></script>
-  <script src="api.js?v=20261127-polish-1"></script>
-  <script defer src="app.js?v=20261127-polish-1"></script>
+  <script src="api.js?v=20261127-archive-1"></script>
+  <script defer src="app.js?v=20261127-archive-1"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -27,7 +27,7 @@
       <a class="brand" href="#home" aria-label="SpringVision — главная"><img class="brand-logo" src="assets/brand/springvision-logo.svg" alt=""><span>SpringVision<small>МУЗЫКА БЕЗ ГРАНИЦ</small></span></a>
       <button class="menu-toggle" id="menuToggle" aria-label="Открыть меню">☰</button>
       <nav id="mainNav" aria-label="Главная навигация">
-        <a href="#season">Сезон</a><a href="#recaps">Рекапы</a><a href="#rules">Правила</a>
+        <a href="#season">Сезон</a><a href="#recaps">Рекапы</a><a href="#archive">Архив</a><a href="#rules">Правила</a>
         
         <button class="button button-small" id="accountButton">Мой аккаунт</button>
       </nav>
@@ -71,6 +71,11 @@
         <div id="finalMediaContent" class="final-media-content"></div>
       </section>
 
+      <section class="section archive-section" id="archive">
+        <div class="section-heading"><div><div class="eyebrow">ИСТОРИЯ КОНКУРСА</div><h2>Архив SpringVision</h2><p class="section-subtitle">Участники, песни и итоговые места завершённых сезонов.</p></div></div>
+        <div id="archiveList" class="archive-seasons"><div class="archive-empty">Загружаем историю конкурса…</div></div>
+      </section>
+
       <section class="section rules-section" id="rules">
         <div class="section-heading"><div><div class="eyebrow">КАК ЭТО РАБОТАЕТ</div><h2>Как участвовать</h2></div></div>
         <div class="steps-grid"><article class="step-card"><span>01</span><h3>Подай заявку</h3><p>Выбери свободную страну, добавь песню, ссылку и 30-секундный рекап.</p></article><article class="step-card"><span>02</span><h3>Дождись решения</h3><p>После проверки заявка появится в списке участников. Решение будет в личном кабинете.</p></article><article class="step-card"><span>03</span><h3>Участвуй в сезоне</h3><p>После одобрения сможешь оценивать выступления других стран.</p></article><article class="step-card"><span>04</span><h3>Узнай результаты</h3><p>Слушай выступления, голосуй и следи за итоговой таблицей.</p></article></div>
@@ -78,7 +83,7 @@
 
       <section class="section admin-section" id="admin" hidden>
         <div class="section-heading"><div><div class="eyebrow">ТОЛЬКО ДЛЯ ОРГАНИЗАТОРОВ</div><h2>Центр управления</h2><p class="section-subtitle">Сезоны, заявки, голосование и публикация результатов.</p></div></div>
-        <div class="admin-grid"><button class="admin-tile" data-admin="applications"><span>▤</span><strong>Заявки</strong><small>Одобрение и комментарии</small></button><button class="admin-tile" data-admin="voting-status"><span>✓</span><strong>Статус голосования</strong><small>Какие страны уже проголосовали</small></button><button class="admin-tile" data-admin="results"><span>★</span><strong>Результаты</strong><small>Промежуточные итоги и баллы стран</small></button><button class="admin-tile" data-admin="seasons"><span>✦</span><strong>Сезоны</strong><small>Даты и настройки конкурса</small></button><button class="admin-tile" data-admin="roles"><span>♙</span><strong>Права доступа</strong><small>Администраторы и жюри</small></button><button class="admin-tile" data-admin="notifications"><span>↗</span><strong>Уведомления</strong><small>Всем, участникам или жюри</small></button></div>
+        <div class="admin-grid"><button class="admin-tile" data-admin="applications"><span>▤</span><strong>Заявки</strong><small>Одобрение и комментарии</small></button><button class="admin-tile" data-admin="voting-status"><span>✓</span><strong>Статус голосования</strong><small>Какие страны уже проголосовали</small></button><button class="admin-tile" data-admin="results"><span>★</span><strong>Результаты</strong><small>Промежуточные итоги и баллы стран</small></button><button class="admin-tile" data-admin="seasons"><span>✦</span><strong>Сезоны</strong><small>Даты и настройки конкурса</small></button><button class="admin-tile" data-admin="roles"><span>♙</span><strong>Права доступа</strong><small>Администраторы и жюри</small></button><button class="admin-tile" data-admin="notifications"><span>↗</span><strong>Уведомления</strong><small>Всем, участникам или жюри</small></button><button class="admin-tile" data-admin="archive"><span>▣</span><strong>Архив и история</strong><small>Сохранение сезонов и выгрузка данных</small></button></div>
       </section>
     </main>
 
