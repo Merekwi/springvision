@@ -1462,10 +1462,7 @@ ${link}
           await db.storage.from(BUCKET).remove([newPath]);
           throw new Error("Не удалось привязать фотографию к заявке: " + updated.error.message);
         }
-        if (current.data.performer_photo_storage_path && current.data.performer_photo_storage_path !== newPath) {
-          const removed = await db.storage.from(BUCKET).remove([current.data.performer_photo_storage_path]);
-          if (removed.error) console.error("New performer photo saved, old photo cleanup failed:", current.data.id, removed.error);
-        }
+        // Keep the previous photo in private Storage so older archive snapshots never lose their media.
         await writeAudit("performer_photo_uploaded", "submission", submissionId, { season_id: seasonId });
         try { await saveSpringVisionArchiveSnapshot(db, seasonId); }
         catch (archiveError) { console.error("Performer photo saved, but archive snapshot refresh failed:", submissionId, archiveError); }
@@ -1783,10 +1780,10 @@ ${link}
           await db.storage.from(BUCKET).remove([path]);
           throw new Error("Не удалось сохранить изображение сезона: " + updated.error.message);
         }
-        const oldLogoPath = typeof season.logo_url === "string" && season.logo_url.startsWith("storage:")
-          ? season.logo_url.slice("storage:".length) : null;
-        if (oldLogoPath) await db.storage.from(BUCKET).remove([oldLogoPath]);
+        // Retain prior season artwork because an existing archive snapshot may still reference it.
         await writeAudit("season_image_uploaded", "season", seasonId);
+        try { await saveSpringVisionArchiveSnapshot(db, seasonId); }
+        catch (archiveError) { console.error("Season image saved, but archive snapshot refresh failed:", seasonId, archiveError); }
         return json({ ok: true, logo_url: updated.data.logo_url });
       }
 
@@ -1801,6 +1798,8 @@ ${link}
         const update = await db.from("seasons").update({recording_storage_path:path}).eq("id",seasonId);
         if (update.error) { await db.storage.from(BUCKET).remove([path]); throw new Error(update.error.message); }
         await writeAudit("recording_uploaded","season",seasonId);
+        try { await saveSpringVisionArchiveSnapshot(db, seasonId); }
+        catch (archiveError) { console.error("Recording uploaded, but archive snapshot refresh failed:", seasonId, archiveError); }
         return json({ ok:true, path });
       }
 
