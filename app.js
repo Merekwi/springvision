@@ -389,102 +389,7 @@
     if (!currentIsAdmin) { toast('Нет доступа к этому разделу.'); return; }
     try {
 
-      if (section === 'archive') {
-        showAdminDialog('Архив и история сезонов', '<p class="admin-message">Здесь хранятся снимки всех заявок. При завершении сезона и публикации итогов места фиксируются автоматически. Перед удалением сезона данные и загруженные медиа тоже сохраняются.</p><div class="admin-form-row"><label>Сезон для сохранения<select id="archiveSeason"></select></label><button type="button" class="button button-small" id="saveArchiveSeason">Сохранить снимок</button></div><div class="archive-admin-actions"><button type="button" class="button button-ghost button-small" id="refreshArchiveList">Обновить список</button><button type="button" class="button button-ghost button-small" id="exportArchiveCsv">Скачать CSV</button></div><p id="archiveAdminMessage" class="admin-message" role="status"></p><div id="archiveAdminList" class="archive-admin-list"></div>');
-        const seasons = await fillSeasonSelect($('#archiveSeason'), 'Выбери сезон');
-        let archives = [];
-        const statusLabels = { approved: 'Одобрена', pending: 'На проверке', rejected: 'Отклонена', withdrawn: 'Отозвана' };
-        const renderArchiveList = async () => {
-          const list = $('#archiveAdminList');
-          const message = $('#archiveAdminMessage');
-          list.replaceChildren();
-          message.textContent = 'Загружаем архив…';
-          const result = await window.SpringVisionAPI.request('admin_archive_list');
-          archives = result.archives || [];
-          message.textContent = archives.length ? 'Сохранено сезонов: ' + archives.length + '.' : 'Снимков пока нет. Выбери сезон и сохрани первый снимок.';
-          if (!archives.length) return;
-          archives.forEach(archive => {
-            const card = document.createElement('article');
-            card.className = 'archive-admin-season';
-            const header = document.createElement('div');
-            header.className = 'archive-admin-season-header';
-            const text = document.createElement('div');
-            const title = document.createElement('h3');
-            title.textContent = '№' + archive.season_number + ' · ' + archive.season_title;
-            const meta = document.createElement('p');
-            meta.textContent = 'Заявок: ' + archive.entry_count + ' · Одобрено: ' + archive.participant_count + ' · Снимок: ' + new Date(archive.archived_at).toLocaleString('ru-RU');
-            text.append(title, meta);
-            const status = document.createElement('span');
-            status.className = 'archive-status';
-            status.textContent = archive.is_public ? 'Опубликован' : 'Только организаторам';
-            header.append(text, status);
-            card.append(header);
-            const details = document.createElement('details');
-            const summary = document.createElement('summary');
-            summary.textContent = 'Показать заявки (' + (archive.entries || []).length + ')';
-            const entries = document.createElement('div');
-            entries.className = 'archive-admin-entries';
-            (archive.entries || []).forEach(entry => {
-              const line = document.createElement('div');
-              line.className = 'archive-admin-entry';
-              const rank = document.createElement('strong');
-              rank.textContent = entry.placement ? String(entry.placement) + ' место' : '—';
-              const description = document.createElement('span');
-              description.textContent = (entry.country_name || entry.country_code || 'Страна') + ' · ' + (entry.artist || 'Без исполнителя') + ' — ' + (entry.song_title || 'Без названия');
-              const label = document.createElement('small');
-              label.textContent = statusLabels[entry.status] || entry.status || 'Неизвестно';
-              line.append(rank, description, label);
-              entries.append(line);
-            });
-            details.append(summary, entries);
-            card.append(details);
-            list.append(card);
-          });
-        };
-        const downloadCsv = () => {
-          const headers = ['Номер сезона','Название сезона','Код страны','Страна','Исполнитель','Песня','Статус заявки','Место','Баллы жюри','Баллы зрителей','Всего баллов','Порядок выступления','Ссылка на выступление'];
-          const rows = [headers];
-          archives.forEach(archive => (archive.entries || []).forEach(entry => {
-            rows.push([
-              archive.season_number, archive.season_title, entry.country_code, entry.country_name,
-              entry.artist, entry.song_title, statusLabels[entry.status] || entry.status,
-              entry.placement ?? '', entry.jury_points ?? 0, entry.televote_points ?? 0,
-              entry.total_points ?? 0, entry.performance_order ?? '', entry.performance_url || ''
-            ]);
-          }));
-          const quote = value => '"' + String(value ?? '').replaceAll('"', '""') + '"';
-          const csv = '\uFEFF' + rows.map(row => row.map(quote).join(';')).join('\r\n');
-          const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = 'SpringVision_archive_' + new Date().toISOString().slice(0,10) + '.csv';
-          document.body.append(link);
-          link.click();
-          link.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        };
-        $('#saveArchiveSeason').addEventListener('click', async () => {
-          const seasonId = $('#archiveSeason').value;
-          const out = $('#archiveAdminMessage');
-          if (!seasonId) { out.textContent = 'Сначала выбери сезон.'; return; }
-          const button = $('#saveArchiveSeason');
-          button.disabled = true;
-          out.textContent = 'Сохраняем заявки и результаты…';
-          try {
-            const saved = await window.SpringVisionAPI.request('admin_archive_save', { seasonId });
-            out.textContent = 'Снимок сохранён: ' + saved.archive.entry_count + ' заявок, ' + saved.archive.participant_count + ' одобренных участников. ' + (saved.archive.is_public ? 'Итоги уже доступны в публичном архиве.' : 'Пока виден только организаторам.');
-            await renderArchiveList();
-            await loadPublicArchive();
-          } catch (error) {
-            out.textContent = error.message || 'Не удалось сохранить архив.';
-          } finally {
-            button.disabled = false;
-          }
-        });
-        $('#refreshArchiveList').addEventListener('click', () => renderArchiveList().catch(adminError));
-        $('#exportArchiveCsv').addEventListener('click', downloadCsv);
-        await renderArchiveList();
-      } else if (section === 'applications') {
+      if (section === 'applications') {
 
         showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<div class="season-select-wrap"><button type="button" id="adminAppSeasonTrigger" class="season-select-trigger" aria-expanded="false">Список сезонов… <span>⌄</span></button><div id="adminAppSeasonMenu" class="season-select-menu" hidden></div><select id="adminAppSeason" class="season-select-native" required aria-hidden="true" tabindex="-1"></select></div></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
         const appSeasons = await fillSeasonSelect($('#adminAppSeason'));
@@ -932,11 +837,12 @@
           catch(error){out.textContent=error.message||'Не удалось изменить роль.';}
         });
       } else if (section === 'archive') {
-        showAdminDialog('Исторический архив', '<p class="admin-message">Снимок сохраняет все заявки выбранного сезона, включая отозванные и отклонённые. Итоговые места появятся после завершения сезона и публикации результатов. Снимки обновляются автоматически при завершении или удалении сезона.</p><div class="admin-form-row"><label>Сезон для сохранения<select id="archiveSeasonSelect"></select></label><button type="button" class="button button-small" id="saveArchiveSnapshot">Сохранить снимок</button></div><div class="archive-admin-actions"><button type="button" class="button button-ghost button-small" id="downloadArchiveJSON">Скачать архив JSON</button><button type="button" class="button button-ghost button-small" id="refreshArchiveAdmin">Обновить список</button></div><p id="archiveAdminMessage" class="admin-message" role="status"></p><div id="archiveAdminList" class="archive-admin-list"></div>');
+        showAdminDialog('Исторический архив', '<p class="admin-message">Снимок сохраняет все заявки выбранного сезона, включая отозванные и отклонённые. Итоговые места появятся после завершения сезона и публикации результатов. Снимки обновляются автоматически при завершении или удалении сезона.</p><div class="admin-form-row"><label>Сезон для сохранения<select id="archiveSeasonSelect"></select></label><button type="button" class="button button-small" id="saveArchiveSnapshot">Сохранить снимок</button></div><div class="archive-admin-actions"><button type="button" class="button button-ghost button-small" id="downloadArchiveJSON">Скачать архив JSON</button><button type="button" class="button button-ghost button-small" id="downloadArchiveCSV">Скачать CSV для постов</button><button type="button" class="button button-ghost button-small" id="refreshArchiveAdmin">Обновить список</button></div><p id="archiveAdminMessage" class="admin-message" role="status"></p><div id="archiveAdminList" class="archive-admin-list"></div>');
         const seasonSelect = $('#archiveSeasonSelect');
         const status = $('#archiveAdminMessage');
         const saveButton = $('#saveArchiveSnapshot');
         const downloadButton = $('#downloadArchiveJSON');
+        const downloadCsvButton = $('#downloadArchiveCSV');
         const refreshButton = $('#refreshArchiveAdmin');
         const seasons = await fillSeasonSelect(seasonSelect);
         if (seasons.length) seasonSelect.value = seasons[0].id;
@@ -1078,6 +984,40 @@
             status.textContent = error instanceof Error ? error.message : 'Не удалось подготовить экспорт.';
           } finally {
             downloadButton.disabled = false;
+          }
+        });
+        downloadCsvButton.addEventListener('click', async () => {
+          downloadCsvButton.disabled = true;
+          try {
+            const result = await window.SpringVisionAPI.request('admin_archive_list');
+            const archives = result.archives || [];
+            const headers = ['Номер сезона','Название сезона','Код страны','Страна','Исполнитель','Песня','Статус заявки','Место','Баллы жюри','Баллы зрителей','Всего баллов','Порядок выступления','Ссылка на выступление'];
+            const rows = [headers];
+            const statusLabels = { approved:'Одобрена', pending:'На проверке', rejected:'Отклонена', withdrawn:'Отозвана' };
+            archives.forEach(archive => (archive.entries || []).forEach(entry => {
+              rows.push([
+                archive.season_number, archive.season_title, entry.country_code, entry.country_name,
+                entry.artist, entry.song_title, statusLabels[entry.status] || entry.status,
+                entry.placement ?? '', entry.jury_points ?? 0, entry.televote_points ?? 0,
+                entry.total_points ?? 0, entry.performance_order ?? '', entry.performance_url || ''
+              ]);
+            }));
+            const quote = value => '"' + String(value ?? '').replaceAll('"', '""') + '"';
+            const csv = '\uFEFF' + rows.map(row => row.map(quote).join(';')).join('\r\n');
+            const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'SpringVision_archive_' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            status.textContent = 'CSV готов: строк ' + (rows.length - 1) + '.';
+          } catch (error) {
+            status.textContent = error instanceof Error ? error.message : 'Не удалось подготовить CSV.';
+          } finally {
+            downloadCsvButton.disabled = false;
           }
         });
 
@@ -1604,165 +1544,6 @@
     section.hidden=!shown;
   };
 
-
-  async function loadPublicArchive() {
-    const list = $('#archiveList');
-    if (!list) return;
-    try {
-      const result = await window.SpringVisionAPI.request('public_archive');
-      const archives = result.archives || [];
-      list.replaceChildren();
-      if (!archives.length) {
-        const empty = document.createElement('div');
-        empty.className = 'archive-empty';
-        empty.textContent = 'Завершённые сезоны появятся здесь после публикации итоговых результатов.';
-        list.append(empty);
-        return;
-      }
-      archives.forEach(season => {
-        const card = document.createElement('article');
-        card.className = 'archive-season';
-        const header = document.createElement('div');
-        header.className = 'archive-season-header';
-        if (season.logo_url) {
-          const logo = document.createElement('img');
-          logo.className = 'archive-season-logo';
-          logo.src = season.logo_url;
-          logo.alt = '';
-          logo.loading = 'lazy';
-          logo.onerror = () => { logo.hidden = true; };
-          header.append(logo);
-        }
-        const heading = document.createElement('div');
-        heading.className = 'archive-season-heading';
-        const eyebrow = document.createElement('div');
-        eyebrow.className = 'eyebrow';
-        eyebrow.textContent = 'СЕЗОН №' + season.season_number;
-        const title = document.createElement('h3');
-        title.textContent = season.season_title;
-        const meta = document.createElement('p');
-        const date = season.contest_at ? new Date(season.contest_at).toLocaleDateString('ru-RU') : '';
-        meta.textContent = [date ? 'Финал: ' + date : '', (season.participant_count || 0) + ' участников'].filter(Boolean).join(' · ');
-        heading.append(eyebrow, title, meta);
-        const total = document.createElement('div');
-        total.className = 'archive-season-total';
-        const totalNumber = document.createElement('strong');
-        totalNumber.textContent = String(season.standings?.length || 0);
-        const totalLabel = document.createElement('span');
-        totalLabel.textContent = 'стран';
-        total.append(totalNumber, totalLabel);
-        header.append(heading, total);
-        card.append(header);
-        const standings = document.createElement('div');
-        standings.className = 'archive-standings';
-        const entries = Array.isArray(season.standings) ? season.standings : [];
-        if (!entries.length) {
-          const empty = document.createElement('p');
-          empty.className = 'archive-empty';
-          empty.textContent = 'В этом сезоне не сохранена итоговая таблица.';
-          standings.append(empty);
-        }
-        entries.forEach(entry => {
-          const row = document.createElement('article');
-          row.className = 'archive-entry';
-          const rank = document.createElement('strong');
-          rank.className = 'archive-entry-rank';
-          rank.textContent = entry.placement ? String(entry.placement).padStart(2, '0') : '—';
-          const main = document.createElement('div');
-          main.className = 'archive-entry-main';
-          if (entry.performer_photo_url) {
-            const photo = document.createElement('img');
-            photo.className = 'archive-entry-photo';
-            photo.src = entry.performer_photo_url;
-            photo.alt = '';
-            photo.loading = 'lazy';
-            photo.onerror = () => { photo.hidden = true; };
-            main.append(photo);
-          }
-          const flag = document.createElement('img');
-          flag.className = 'archive-entry-flag';
-          flag.src = 'assets/flags/heart/' + String(entry.country_code || '').toLowerCase() + '.svg';
-          flag.alt = '';
-          flag.onerror = () => { flag.hidden = true; };
-          const copy = document.createElement('div');
-          copy.className = 'archive-entry-copy';
-          const country = document.createElement('span');
-          country.className = 'archive-entry-country';
-          country.textContent = entry.country_name || String(entry.country_code || '').toUpperCase();
-          const artist = document.createElement('strong');
-          artist.textContent = entry.artist || 'Исполнитель не указан';
-          const song = document.createElement('small');
-          song.textContent = '«' + (entry.song_title || 'Без названия') + '»';
-          copy.append(country, artist, song);
-          main.append(flag, copy);
-          const points = document.createElement('div');
-          points.className = 'archive-entry-points';
-          const score = document.createElement('strong');
-          score.textContent = String(entry.total_points || 0);
-          const scoreLabel = document.createElement('small');
-          scoreLabel.textContent = 'баллов';
-          points.append(score, scoreLabel);
-          row.append(rank, main, points);
-          standings.append(row);
-          const actions = document.createElement('div');
-          actions.className = 'archive-entry-actions';
-          if (entry.recap_url) {
-            const recap = document.createElement('a');
-            recap.href = entry.recap_url;
-            recap.target = '_blank';
-            recap.rel = 'noopener noreferrer';
-            recap.textContent = 'Смотреть рекап ↗';
-            actions.append(recap);
-          }
-          if (entry.performance_url) {
-            const performance = document.createElement('a');
-            performance.href = entry.performance_url;
-            performance.target = '_blank';
-            performance.rel = 'noopener noreferrer';
-            performance.textContent = 'Выступление / клип ↗';
-            actions.append(performance);
-          }
-          if (actions.childElementCount) standings.append(actions);
-        });
-        card.append(standings);
-        const media = document.createElement('div');
-        media.className = 'archive-season-media';
-        if (season.recording_url) {
-          const recording = document.createElement('a');
-          recording.href = season.recording_url;
-          recording.target = '_blank';
-          recording.rel = 'noopener noreferrer';
-          recording.textContent = 'Запись финала ↗';
-          media.append(recording);
-        }
-        if (season.combined_recap_url) {
-          const combined = document.createElement('a');
-          combined.href = season.combined_recap_url;
-          combined.target = '_blank';
-          combined.rel = 'noopener noreferrer';
-          combined.textContent = 'Общий рекап сезона ↗';
-          media.append(combined);
-        }
-        if (season.twitch_url) {
-          const twitch = document.createElement('a');
-          twitch.href = season.twitch_url;
-          twitch.target = '_blank';
-          twitch.rel = 'noopener noreferrer';
-          twitch.textContent = 'Трансляция на Twitch ↗';
-          media.append(twitch);
-        }
-        if (media.childElementCount) card.append(media);
-        list.append(card);
-      });
-    } catch (error) {
-      list.replaceChildren();
-      const empty = document.createElement('div');
-      empty.className = 'archive-empty';
-      empty.textContent = 'Не удалось загрузить архив. Открой приложение через Telegram и попробуй обновить страницу.';
-      list.append(empty);
-      console.warn('SpringVision archive could not be loaded:', error);
-    }
-  }
 
   const renderFinalMedia = (season) => {
     const section = $('#finalMedia');
