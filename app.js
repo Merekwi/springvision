@@ -883,6 +883,22 @@
               + ' · Одобрено: ' + Number(archive.participant_count || 0)
               + ' · Снимок: ' + savedAt;
             card.append(header, meta);
+            const mediaLinks = document.createElement('div');
+            mediaLinks.className = 'archive-admin-links';
+            const addArchiveLink = (parent, label, url) => {
+              if (typeof url !== 'string' || !url.trim()) return;
+              const link = document.createElement('a');
+              link.href = url;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.textContent = label;
+              parent.append(link);
+            };
+            addArchiveLink(mediaLinks, 'Логотип сезона ↗', archive.logo_url);
+            addArchiveLink(mediaLinks, 'Запись финала ↗', archive.recording_url);
+            addArchiveLink(mediaLinks, 'Общий рекап ↗', archive.combined_recap_url);
+            addArchiveLink(mediaLinks, 'Трансляция ↗', archive.twitch_url);
+            if (mediaLinks.childElementCount) card.append(mediaLinks);
 
             const entries = Array.isArray(archive.entries) ? archive.entries.slice() : [];
             entries.sort((a, b) => {
@@ -909,6 +925,21 @@
               const song = document.createElement('small');
               song.textContent = entry.song_title || 'Название песни не указано';
               copy.append(name, song);
+              const media = document.createElement('div');
+              media.className = 'archive-admin-links';
+              const addEntryLink = (label, url) => {
+                if (typeof url !== 'string' || !url.trim()) return;
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.textContent = label;
+                media.append(link);
+              };
+              addEntryLink('Фото ↗', entry.performer_photo_url);
+              addEntryLink('Рекап ↗', entry.recap_url);
+              addEntryLink('Выступление ↗', entry.performance_url);
+              if (media.childElementCount) copy.append(media);
               const state = document.createElement('span');
               state.className = 'archive-status';
               state.textContent = labels[entry.status] || entry.status || 'Неизвестно';
@@ -991,7 +1022,7 @@
           try {
             const result = await window.SpringVisionAPI.request('admin_archive_list');
             const archives = result.archives || [];
-            const headers = ['Номер сезона','Название сезона','Код страны','Страна','Исполнитель','Песня','Статус заявки','Место','Баллы жюри','Баллы зрителей','Всего баллов','Порядок выступления','Ссылка на выступление'];
+            const headers = ['Номер сезона','Название сезона','Код страны','Страна','Исполнитель','Песня','Статус заявки','Место','Баллы жюри','Баллы зрителей','Всего баллов','Порядок выступления','Фото исполнителя','Рекап','Ссылка на выступление','Логотип сезона','Запись финала','Общий рекап сезона','Трансляция'];
             const rows = [headers];
             const statusLabels = { approved:'Одобрена', pending:'На проверке', rejected:'Отклонена', withdrawn:'Отозвана' };
             archives.forEach(archive => (archive.entries || []).forEach(entry => {
@@ -999,7 +1030,9 @@
                 archive.season_number, archive.season_title, entry.country_code, entry.country_name,
                 entry.artist, entry.song_title, statusLabels[entry.status] || entry.status,
                 entry.placement ?? '', entry.jury_points ?? 0, entry.televote_points ?? 0,
-                entry.total_points ?? 0, entry.performance_order ?? '', entry.performance_url || ''
+                entry.total_points ?? 0, entry.performance_order ?? '', entry.performer_photo_url || '',
+                entry.recap_url || '', entry.performance_url || '', archive.logo_url || '',
+                archive.recording_url || '', archive.combined_recap_url || '', archive.twitch_url || ''
               ]);
             }));
             const quote = value => '"' + String(value ?? '').replaceAll('"', '""') + '"';
