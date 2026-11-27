@@ -1350,6 +1350,166 @@
     section.hidden=!shown;
   };
 
+
+  async function loadPublicArchive() {
+    const list = $('#archiveList');
+    if (!list) return;
+    try {
+      const result = await window.SpringVisionAPI.request('public_archive');
+      const archives = result.archives || [];
+      list.replaceChildren();
+      if (!archives.length) {
+        const empty = document.createElement('div');
+        empty.className = 'archive-empty';
+        empty.textContent = 'Завершённые сезоны появятся здесь после публикации итоговых результатов.';
+        list.append(empty);
+        return;
+      }
+      archives.forEach(season => {
+        const card = document.createElement('article');
+        card.className = 'archive-season';
+        const header = document.createElement('div');
+        header.className = 'archive-season-header';
+        if (season.logo_url) {
+          const logo = document.createElement('img');
+          logo.className = 'archive-season-logo';
+          logo.src = season.logo_url;
+          logo.alt = '';
+          logo.loading = 'lazy';
+          logo.onerror = () => { logo.hidden = true; };
+          header.append(logo);
+        }
+        const heading = document.createElement('div');
+        heading.className = 'archive-season-heading';
+        const eyebrow = document.createElement('div');
+        eyebrow.className = 'eyebrow';
+        eyebrow.textContent = 'СЕЗОН №' + season.season_number;
+        const title = document.createElement('h3');
+        title.textContent = season.season_title;
+        const meta = document.createElement('p');
+        const date = season.contest_at ? new Date(season.contest_at).toLocaleDateString('ru-RU') : '';
+        meta.textContent = [date ? 'Финал: ' + date : '', (season.participant_count || 0) + ' участников'].filter(Boolean).join(' · ');
+        heading.append(eyebrow, title, meta);
+        const total = document.createElement('div');
+        total.className = 'archive-season-total';
+        const totalNumber = document.createElement('strong');
+        totalNumber.textContent = String(season.standings?.length || 0);
+        const totalLabel = document.createElement('span');
+        totalLabel.textContent = 'стран';
+        total.append(totalNumber, totalLabel);
+        header.append(heading, total);
+        card.append(header);
+        const standings = document.createElement('div');
+        standings.className = 'archive-standings';
+        const entries = Array.isArray(season.standings) ? season.standings : [];
+        if (!entries.length) {
+          const empty = document.createElement('p');
+          empty.className = 'archive-empty';
+          empty.textContent = 'В этом сезоне не сохранена итоговая таблица.';
+          standings.append(empty);
+        }
+        entries.forEach(entry => {
+          const row = document.createElement('article');
+          row.className = 'archive-entry';
+          const rank = document.createElement('strong');
+          rank.className = 'archive-entry-rank';
+          rank.textContent = entry.placement ? String(entry.placement).padStart(2, '0') : '—';
+          const main = document.createElement('div');
+          main.className = 'archive-entry-main';
+          if (entry.performer_photo_url) {
+            const photo = document.createElement('img');
+            photo.className = 'archive-entry-photo';
+            photo.src = entry.performer_photo_url;
+            photo.alt = '';
+            photo.loading = 'lazy';
+            photo.onerror = () => { photo.hidden = true; };
+            main.append(photo);
+          }
+          const flag = document.createElement('img');
+          flag.className = 'archive-entry-flag';
+          flag.src = 'assets/flags/heart/' + String(entry.country_code || '').toLowerCase() + '.svg';
+          flag.alt = '';
+          flag.onerror = () => { flag.hidden = true; };
+          const copy = document.createElement('div');
+          copy.className = 'archive-entry-copy';
+          const country = document.createElement('span');
+          country.className = 'archive-entry-country';
+          country.textContent = entry.country_name || String(entry.country_code || '').toUpperCase();
+          const artist = document.createElement('strong');
+          artist.textContent = entry.artist || 'Исполнитель не указан';
+          const song = document.createElement('small');
+          song.textContent = '«' + (entry.song_title || 'Без названия') + '»';
+          copy.append(country, artist, song);
+          main.append(flag, copy);
+          const points = document.createElement('div');
+          points.className = 'archive-entry-points';
+          const score = document.createElement('strong');
+          score.textContent = String(entry.total_points || 0);
+          const scoreLabel = document.createElement('small');
+          scoreLabel.textContent = 'баллов';
+          points.append(score, scoreLabel);
+          row.append(rank, main, points);
+          standings.append(row);
+          const actions = document.createElement('div');
+          actions.className = 'archive-entry-actions';
+          if (entry.recap_url) {
+            const recap = document.createElement('a');
+            recap.href = entry.recap_url;
+            recap.target = '_blank';
+            recap.rel = 'noopener noreferrer';
+            recap.textContent = 'Смотреть рекап ↗';
+            actions.append(recap);
+          }
+          if (entry.performance_url) {
+            const performance = document.createElement('a');
+            performance.href = entry.performance_url;
+            performance.target = '_blank';
+            performance.rel = 'noopener noreferrer';
+            performance.textContent = 'Выступление / клип ↗';
+            actions.append(performance);
+          }
+          if (actions.childElementCount) standings.append(actions);
+        });
+        card.append(standings);
+        const media = document.createElement('div');
+        media.className = 'archive-season-media';
+        if (season.recording_url) {
+          const recording = document.createElement('a');
+          recording.href = season.recording_url;
+          recording.target = '_blank';
+          recording.rel = 'noopener noreferrer';
+          recording.textContent = 'Запись финала ↗';
+          media.append(recording);
+        }
+        if (season.combined_recap_url) {
+          const combined = document.createElement('a');
+          combined.href = season.combined_recap_url;
+          combined.target = '_blank';
+          combined.rel = 'noopener noreferrer';
+          combined.textContent = 'Общий рекап сезона ↗';
+          media.append(combined);
+        }
+        if (season.twitch_url) {
+          const twitch = document.createElement('a');
+          twitch.href = season.twitch_url;
+          twitch.target = '_blank';
+          twitch.rel = 'noopener noreferrer';
+          twitch.textContent = 'Трансляция на Twitch ↗';
+          media.append(twitch);
+        }
+        if (media.childElementCount) card.append(media);
+        list.append(card);
+      });
+    } catch (error) {
+      list.replaceChildren();
+      const empty = document.createElement('div');
+      empty.className = 'archive-empty';
+      empty.textContent = 'Не удалось загрузить архив. Открой приложение через Telegram и попробуй обновить страницу.';
+      list.append(empty);
+      console.warn('SpringVision archive could not be loaded:', error);
+    }
+  }
+
   const renderFinalMedia = (season) => {
     const section = $('#finalMedia');
     const content = $('#finalMediaContent');
@@ -1449,6 +1609,7 @@
     stateLoading = true;
     try {
       const state = await window.SpringVisionAPI.request('public_state');
+      await loadPublicArchive();
       lastStateLoadedAt = Date.now();
       currentProfile = state.profile || null;
       currentIsAdmin = Boolean(state.isAdmin);
