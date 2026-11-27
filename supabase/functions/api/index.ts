@@ -873,6 +873,8 @@ ${link}
           if (fulfilled.error) console.error("Application saved but reservation could not be marked fulfilled:", fulfilled.error);
         }
         await writeAudit("submission_created", "submission", result.data.id, { season_id: seasonId, country_code: countryCode, used_country_reservation: Boolean(userReservation) });
+        try { await saveSpringVisionArchiveSnapshot(db, seasonId); }
+        catch (archiveError) { console.error("Application saved, but archive snapshot refresh failed:", result.data.id, archiveError); }
         return json({ ok: true, submission: result.data, message: "Заявка отправлена на модерацию." });
       }
 
@@ -1465,6 +1467,8 @@ ${link}
           if (removed.error) console.error("New performer photo saved, old photo cleanup failed:", current.data.id, removed.error);
         }
         await writeAudit("performer_photo_uploaded", "submission", submissionId, { season_id: seasonId });
+        try { await saveSpringVisionArchiveSnapshot(db, seasonId); }
+        catch (archiveError) { console.error("Performer photo saved, but archive snapshot refresh failed:", submissionId, archiveError); }
         const signed = await db.storage.from(BUCKET).createSignedUrl(newPath, 3600);
         return json({ ok: true, performer_photo_url: signed.data?.signedUrl || null });
       }
@@ -1493,6 +1497,8 @@ ${link}
           try { await sendTelegram(botToken, Number(target.data.telegram_id), message); } catch { /* The user may not have started the bot. */ }
         }
         await writeAudit("submission_" + status, "submission", submissionId, { comment });
+        try { await saveSpringVisionArchiveSnapshot(db, current.data.season_id); }
+        catch (archiveError) { console.error("Moderation saved, but archive snapshot refresh failed:", submissionId, archiveError); }
         return json({ submission: update.data });
       }
 
