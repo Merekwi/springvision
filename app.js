@@ -386,7 +386,104 @@
     if (!window.SpringVisionAPI?.configured()) { toast('Сервис сейчас недоступен. Попробуй позже.'); return; }
     if (!currentIsAdmin) { toast('Нет доступа к этому разделу.'); return; }
     try {
-      if (section === 'applications') {
+
+      if (section === 'archive') {
+        showAdminDialog('Архив и история сезонов', '<p class="admin-message">Здесь хранятся снимки всех заявок. При завершении сезона и публикации итогов места фиксируются автоматически. Перед удалением сезона данные и загруженные медиа тоже сохраняются.</p><div class="admin-form-row"><label>Сезон для сохранения<select id="archiveSeason"></select></label><button type="button" class="button button-small" id="saveArchiveSeason">Сохранить снимок</button></div><div class="archive-admin-actions"><button type="button" class="button button-ghost button-small" id="refreshArchiveList">Обновить список</button><button type="button" class="button button-ghost button-small" id="exportArchiveCsv">Скачать CSV</button></div><p id="archiveAdminMessage" class="admin-message" role="status"></p><div id="archiveAdminList" class="archive-admin-list"></div>');
+        const seasons = await fillSeasonSelect($('#archiveSeason'), 'Выбери сезон');
+        let archives = [];
+        const statusLabels = { approved: 'Одобрена', pending: 'На проверке', rejected: 'Отклонена', withdrawn: 'Отозвана' };
+        const renderArchiveList = async () => {
+          const list = $('#archiveAdminList');
+          const message = $('#archiveAdminMessage');
+          list.replaceChildren();
+          message.textContent = 'Загружаем архив…';
+          const result = await window.SpringVisionAPI.request('admin_archive_list');
+          archives = result.archives || [];
+          message.textContent = archives.length ? 'Сохранено сезонов: ' + archives.length + '.' : 'Снимков пока нет. Выбери сезон и сохрани первый снимок.';
+          if (!archives.length) return;
+          archives.forEach(archive => {
+            const card = document.createElement('article');
+            card.className = 'archive-admin-season';
+            const header = document.createElement('div');
+            header.className = 'archive-admin-season-header';
+            const text = document.createElement('div');
+            const title = document.createElement('h3');
+            title.textContent = '№' + archive.season_number + ' · ' + archive.season_title;
+            const meta = document.createElement('p');
+            meta.textContent = 'Заявок: ' + archive.entry_count + ' · Одобрено: ' + archive.participant_count + ' · Снимок: ' + new Date(archive.archived_at).toLocaleString('ru-RU');
+            text.append(title, meta);
+            const status = document.createElement('span');
+            status.className = 'archive-status';
+            status.textContent = archive.is_public ? 'Опубликован' : 'Только организаторам';
+            header.append(text, status);
+            card.append(header);
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = 'Показать заявки (' + (archive.entries || []).length + ')';
+            const entries = document.createElement('div');
+            entries.className = 'archive-admin-entries';
+            (archive.entries || []).forEach(entry => {
+              const line = document.createElement('div');
+              line.className = 'archive-admin-entry';
+              const rank = document.createElement('strong');
+              rank.textContent = entry.placement ? String(entry.placement) + ' место' : '—';
+              const description = document.createElement('span');
+              description.textContent = (entry.country_name || entry.country_code || 'Страна') + ' · ' + (entry.artist || 'Без исполнителя') + ' — ' + (entry.song_title || 'Без названия');
+              const label = document.createElement('small');
+              label.textContent = statusLabels[entry.status] || entry.status || 'Неизвестно';
+              line.append(rank, description, label);
+              entries.append(line);
+            });
+            details.append(summary, entries);
+            card.append(details);
+            list.append(card);
+          });
+        };
+        const downloadCsv = () => {
+          const headers = ['Номер сезона','Название сезона','Код страны','Страна','Исполнитель','Песня','Статус заявки','Место','Баллы жюри','Баллы зрителей','Всего баллов','Порядок выступления','Ссылка на выступление'];
+          const rows = [headers];
+          archives.forEach(archive => (archive.entries || []).forEach(entry => {
+            rows.push([
+              archive.season_number, archive.season_title, entry.country_code, entry.country_name,
+              entry.artist, entry.song_title, statusLabels[entry.status] || entry.status,
+              entry.placement ?? '', entry.jury_points ?? 0, entry.televote_points ?? 0,
+              entry.total_points ?? 0, entry.performance_order ?? '', entry.performance_url || ''
+            ]);
+          }));
+          const quote = value => '"' + String(value ?? '').replaceAll('"', '""') + '"';
+          const csv = '\uFEFF' + rows.map(row => row.map(quote).join(';')).join('\r\n');
+          const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'SpringVision_archive_' + new Date().toISOString().slice(0,10) + '.csv';
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        };
+        $('#saveArchiveSeason').addEventListener('click', async () => {
+          const seasonId = $('#archiveSeason').value;
+          const out = $('#archiveAdminMessage');
+          if (!seasonId) { out.textContent = 'Сначала выбери сезон.'; return; }
+          const button = $('#saveArchiveSeason');
+          button.disabled = true;
+          out.textContent = 'Сохраняем заявки и результаты…';
+          try {
+            const saved = await window.SpringVisionAPI.request('admin_archive_save', { seasonId });
+            out.textContent = 'Снимок сохранён: ' + saved.archive.entry_count + ' заявок, ' + saved.archive.participant_count + ' одобренных участников. ' + (saved.archive.is_public ? 'Итоги уже доступны в публичном архиве.' : 'Пока виден только организаторам.');
+            await renderArchiveList();
+            await loadPublicArchive();
+          } catch (error) {
+            out.textContent = error.message || 'Не удалось сохранить архив.';
+          } finally {
+            button.disabled = false;
+          }
+        });
+        $('#refreshArchiveList').addEventListener('click', () => renderArchiveList().catch(adminError));
+        $('#exportArchiveCsv').addEventListener('click', downloadCsv);
+        await renderArchiveList();
+      } else if (section === 'applications') {
+
         showAdminDialog('Модерация заявок',`<div class="admin-form-row"><label>Сезон<div class="season-select-wrap"><button type="button" id="adminAppSeasonTrigger" class="season-select-trigger" aria-expanded="false">Список сезонов… <span>⌄</span></button><div id="adminAppSeasonMenu" class="season-select-menu" hidden></div><select id="adminAppSeason" class="season-select-native" required aria-hidden="true" tabindex="-1"></select></div></label><button type="button" class="button button-small" id="loadAdminApps">Обновить</button></div><div class="admin-inline-actions"><button type="button" class="button button-ghost button-small" id="downloadRecaps">Скачать все рекапы ZIP</button></div><div id="adminApplicationsList" class="admin-applications-list"></div>`);
         const appSeasons = await fillSeasonSelect($('#adminAppSeason'));
         const seasonTrigger = $('#adminAppSeasonTrigger');
