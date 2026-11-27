@@ -1107,7 +1107,40 @@ ${link}
         const result = await db.from("springvision_archive_seasons").select("*")
           .order("season_number", { ascending: false });
         if (result.error) throw new Error("Не удалось загрузить служебный архив: " + result.error.message);
-        return json({ archives: result.data || [] });
+        const signedUrls = new Map<string, string | null>();
+        const signPath = async (value: unknown) => {
+          if (typeof value !== "string" || !value.trim()) return null;
+          const path = value.trim();
+          if (signedUrls.has(path)) return signedUrls.get(path) || null;
+          const signed = await db.storage.from(BUCKET).createSignedUrl(path, 3600);
+          const url = signed.error ? null : signed.data?.signedUrl || null;
+          if (signed.error) console.error("Could not sign admin archive media URL:", path, signed.error);
+          signedUrls.set(path, url);
+          return url;
+        };
+        const archives = await Promise.all((result.data || []).map(async (season: any) => {
+          const logoPath = typeof season.logo_url === "string" && season.logo_url.startsWith("storage:")
+            ? season.logo_url.slice("storage:".length) : null;
+          const entries = await Promise.all((Array.isArray(season.entries) ? season.entries : []).map(async (entry: any) => ({
+            ...entry,
+            recap_url: await signPath(entry.recap_storage_path),
+            performer_photo_url: await signPath(entry.performer_photo_storage_path),
+          })));
+          const standings = await Promise.all((Array.isArray(season.standings) ? season.standings : []).map(async (entry: any) => ({
+            ...entry,
+            recap_url: await signPath(entry.recap_storage_path),
+            performer_photo_url: await signPath(entry.performer_photo_storage_path),
+          })));
+          return {
+            ...season,
+            logo_url: logoPath ? await signPath(logoPath) : season.logo_url,
+            recording_url: await signPath(season.recording_storage_path),
+            combined_recap_url: await signPath(season.combined_recap_storage_path),
+            entries,
+            standings,
+          };
+        }));
+        return json({ archives });
       }
 
       case "admin_archive_save": {
